@@ -10,6 +10,8 @@ import os
 from datetime import datetime
 from typing import Dict, List, Optional
 
+from .constants import DATE_FORMAT
+
 
 class TeamMember:
     """Represents a team member with their properties."""
@@ -21,7 +23,7 @@ class TeamMember:
         self.email = email
         self.role = role
         self.skills = skills or []
-        self.joined_at = datetime.now().strftime("%Y-%m-%d")
+        self.joined_at = datetime.now().strftime(DATE_FORMAT)
     
     def to_dict(self) -> Dict:
         """Convert team member to dictionary."""

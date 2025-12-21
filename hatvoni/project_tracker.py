@@ -10,6 +10,8 @@ import os
 from datetime import datetime
 from typing import Dict, List, Optional
 
+from .constants import DATE_FORMAT, DATETIME_FORMAT
+
 
 class Project:
     """Represents a project with its properties."""
@@ -20,9 +22,9 @@ class Project:
         self.name = name
         self.description = description
         self.status = status
-        self.start_date = start_date or datetime.now().strftime("%Y-%m-%d")
+        self.start_date = start_date or datetime.now().strftime(DATE_FORMAT)
         self.milestones = []
-        self.created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.created_at = datetime.now().strftime(DATETIME_FORMAT)
     
     def to_dict(self) -> Dict:
         """Convert project to dictionary."""
@@ -47,7 +49,7 @@ class Project:
             data.get("start_date")
         )
         project.milestones = data.get("milestones", [])
-        project.created_at = data.get("created_at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        project.created_at = data.get("created_at", datetime.now().strftime(DATETIME_FORMAT))
         return project
 
 
@@ -107,7 +109,7 @@ class ProjectTracker:
         if project:
             project.milestones.append({
                 "description": milestone,
-                "added_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                "added_at": datetime.now().strftime(DATETIME_FORMAT)
             })
             self._save_projects()
             return True

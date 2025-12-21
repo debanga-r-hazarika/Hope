@@ -10,6 +10,8 @@ import os
 from datetime import datetime
 from typing import Dict, List, Optional
 
+from .constants import DATETIME_FORMAT
+
 
 class Task:
     """Represents a task with its properties."""
@@ -24,7 +26,7 @@ class Task:
         self.assigned_to = assigned_to
         self.priority = priority
         self.status = status
-        self.created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.created_at = datetime.now().strftime(DATETIME_FORMAT)
         self.updated_at = self.created_at
     
     def to_dict(self) -> Dict:
@@ -104,7 +106,7 @@ class TaskManager:
         task = self.get_task(task_id)
         if task:
             task.status = status
-            task.updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            task.updated_at = datetime.now().strftime(DATETIME_FORMAT)
             self._save_tasks()
             return True
         return False
@@ -114,7 +116,7 @@ class TaskManager:
         task = self.get_task(task_id)
         if task:
             task.assigned_to = member_id
-            task.updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            task.updated_at = datetime.now().strftime(DATETIME_FORMAT)
             self._save_tasks()
             return True
         return False
