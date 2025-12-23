@@ -1,0 +1,14 @@
+export type PageType = 'dashboard' | 'users' | 'profile' | 'finance';
+
+export interface NavigationItem {
+  id: PageType;
+  label: string;
+  isLogout?: boolean;
+}
+
+export const NAVIGATION_ITEMS: NavigationItem[] = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'finance', label: 'Finance' },
+  { id: 'users', label: 'Users' },
+  { id: 'profile', label: 'My Profile' },
+];

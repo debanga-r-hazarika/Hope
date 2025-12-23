@@ -1,0 +1,215 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { Menu, X } from 'lucide-react';
+import { Header } from './Header';
+import { Sidebar } from './Sidebar';
+import { Dashboard } from '../pages/Dashboard';
+import { Users } from '../pages/Users';
+import { MyProfile } from '../pages/MyProfile';
+import { UserDetail } from '../pages/UserDetail';
+import { Finance } from '../pages/Finance';
+import { Contributions } from '../pages/Contributions';
+import { Income } from '../pages/Income';
+import { Expenses } from '../pages/Expenses';
+import { NAVIGATION_ITEMS, type NavigationItem, type PageType } from '../types/navigation';
+import { useModuleAccess } from '../contexts/ModuleAccessContext';
+
+type FinanceSection = 'dashboard' | 'contributions' | 'income' | 'expenses';
+
+export function AppLayout() {
+  const { signOut } = useAuth();
+  const { access: moduleAccess, loading: accessLoading, getAccessLevel } = useModuleAccess();
+  const [activePage, setActivePage] = useState<PageType>('dashboard');
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [financeSection, setFinanceSection] = useState<FinanceSection>('dashboard');
+
+  const handleLogout = async () => {
+    await signOut();
+  };
+
+  const handleViewUser = (userId: string) => {
+    setSelectedUserId(userId);
+    setIsMobileMenuOpen(false);
+  };
+
+  const handleBackToUsers = () => {
+    setSelectedUserId(null);
+  };
+
+  const handleNavigate = (page: PageType) => {
+    if (page === 'finance' && getAccessLevel('finance') === 'no-access') {
+      setActivePage('dashboard');
+      setSelectedUserId(null);
+      setFinanceSection('dashboard');
+      setIsMobileMenuOpen(false);
+      return;
+    }
+
+    setActivePage(page);
+    setSelectedUserId(null);
+    setFinanceSection('dashboard');
+    setIsMobileMenuOpen(false);
+  };
+
+  const handleFinanceNavigate = (section: FinanceSection) => {
+    setFinanceSection(section);
+  };
+
+  const availableNavItems: NavigationItem[] = useMemo(
+    () =>
+      NAVIGATION_ITEMS.filter((item) => {
+        if (item.id === 'finance') {
+          return getAccessLevel('finance') !== 'no-access';
+        }
+        return true;
+      }),
+    [getAccessLevel]
+  );
+
+  useEffect(() => {
+    if (!accessLoading && getAccessLevel('finance') === 'no-access' && activePage === 'finance') {
+      setActivePage('dashboard');
+    }
+  }, [accessLoading, activePage, getAccessLevel]);
+
+  if (accessLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="inline-block w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="mt-4 text-gray-600 font-medium">Loading modules...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const renderPage = () => {
+    if (activePage === 'users' && selectedUserId !== null) {
+      return <UserDetail userId={selectedUserId} onBack={handleBackToUsers} />;
+    }
+
+    if (activePage === 'finance') {
+      const financeAccessLevel = getAccessLevel('finance');
+      const hasWriteAccess = financeAccessLevel === 'read-write';
+
+      switch (financeSection) {
+        case 'dashboard':
+          return (
+            <Finance
+              onNavigateToSection={(section) => handleFinanceNavigate(section)}
+              accessLevel={financeAccessLevel}
+            />
+          );
+        case 'contributions':
+          return (
+            <Contributions
+              onBack={() => handleFinanceNavigate('dashboard')}
+              hasWriteAccess={hasWriteAccess}
+            />
+          );
+        case 'income':
+          return (
+            <Income
+              onBack={() => handleFinanceNavigate('dashboard')}
+              hasWriteAccess={hasWriteAccess}
+            />
+          );
+        case 'expenses':
+          return (
+            <Expenses
+              onBack={() => handleFinanceNavigate('dashboard')}
+              hasWriteAccess={hasWriteAccess}
+            />
+          );
+        default:
+          return <Finance onNavigateToSection={(section) => handleFinanceNavigate(section)} />;
+      }
+    }
+
+    switch (activePage) {
+      case 'dashboard':
+        return (
+          <Dashboard
+            onNavigateToFinance={() => handleNavigate('finance')}
+            moduleAccess={moduleAccess}
+          />
+        );
+      case 'users':
+        return <Users onViewUser={handleViewUser} />;
+      case 'profile':
+        return <MyProfile />;
+      default:
+        return (
+          <Dashboard
+            onNavigateToFinance={() => handleNavigate('finance')}
+            moduleAccess={moduleAccess}
+          />
+        );
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="hidden lg:block">
+        <Header
+          activePage={activePage}
+          navItems={availableNavItems}
+          onNavigate={handleNavigate}
+          onLogout={handleLogout}
+        />
+        <main className="pt-16">
+          <div className="max-w-7xl mx-auto px-6 py-8">
+            {renderPage()}
+          </div>
+        </main>
+      </div>
+
+      <div className="lg:hidden">
+        <div className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-200 z-40 flex items-center justify-between px-4">
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            aria-label="Toggle menu"
+          >
+            {isMobileMenuOpen ? (
+              <X className="w-6 h-6 text-gray-700" />
+            ) : (
+              <Menu className="w-6 h-6 text-gray-700" />
+            )}
+          </button>
+          <div className="text-lg font-bold text-gray-900">
+            MATVONI INSIDER
+          </div>
+          <div className="w-10"></div>
+        </div>
+
+        {isMobileMenuOpen && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 z-40"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+        )}
+
+        <div
+          className={`fixed left-0 top-0 bottom-0 w-64 bg-sidebar transform transition-transform duration-300 ease-in-out z-50 ${
+            isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          <Sidebar
+            activePage={activePage}
+            navItems={availableNavItems}
+            onNavigate={handleNavigate}
+            onLogout={handleLogout}
+          />
+        </div>
+
+        <main className="pt-16">
+          <div className="px-4 py-6">
+            {renderPage()}
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}

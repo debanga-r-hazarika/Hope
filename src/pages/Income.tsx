@@ -1,0 +1,325 @@
+import { useEffect, useState } from 'react';
+import { ArrowLeft, Plus, Edit2, Trash2, TrendingUp } from 'lucide-react';
+import { IncomeEntry } from '../types/finance';
+import { IncomeForm } from '../components/IncomeForm';
+import {
+  fetchIncome,
+  createIncome,
+  updateIncome,
+  deleteIncome,
+} from '../lib/finance';
+
+interface IncomeProps {
+  onBack: () => void;
+  hasWriteAccess: boolean;
+}
+
+export function Income({ onBack, hasWriteAccess }: IncomeProps) {
+  const [view, setView] = useState<'list' | 'detail' | 'form'>('list');
+  const [selectedEntry, setSelectedEntry] = useState<IncomeEntry | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [incomeEntries, setIncomeEntries] = useState<IncomeEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadIncome = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchIncome();
+      setIncomeEntries(data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load income entries';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadIncome();
+  }, []);
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
+  const handleViewDetail = (entry: IncomeEntry) => {
+    setSelectedEntry(entry);
+    setView('detail');
+  };
+
+  const handleAddNew = () => {
+    setSelectedEntry(null);
+    setIsEditing(false);
+    setView('form');
+  };
+
+  const handleEdit = (entry: IncomeEntry) => {
+    setSelectedEntry(entry);
+    setIsEditing(true);
+    setView('form');
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!hasWriteAccess) {
+      setError('You only have read-only access to Finance.');
+      return;
+    }
+    if (!confirm('Are you sure you want to delete this income entry?')) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await deleteIncome(id);
+      setIncomeEntries((prev) => prev.filter((e) => e.id !== id));
+      setSelectedEntry(null);
+      setView('list');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete income entry';
+      setError(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSave = async (data: Partial<IncomeEntry>) => {
+    if (!hasWriteAccess) {
+      setError('You only have read-only access to Finance.');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      if (isEditing && selectedEntry) {
+        const updated = await updateIncome(selectedEntry.id, data);
+        setIncomeEntries((prev) =>
+          prev.map((e) => (e.id === updated.id ? updated : e))
+        );
+        setSelectedEntry(updated);
+      } else {
+        const created = await createIncome(data);
+        setIncomeEntries((prev) => [created, ...prev]);
+      }
+      setView('list');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to save income entry';
+      setError(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const totalAmount = incomeEntries.reduce((sum, e) => sum + e.amount, 0);
+
+  if (view === 'form') {
+    return (
+      <IncomeForm
+        entry={isEditing ? selectedEntry : null}
+        onSave={handleSave}
+        onCancel={() => setView(selectedEntry ? 'detail' : 'list')}
+      />
+    );
+  }
+
+  if (view === 'detail' && selectedEntry) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setView('list')}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            Back to List
+          </button>
+
+          {hasWriteAccess && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleEdit(selectedEntry)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Edit2 className="w-4 h-4" />
+                Edit
+              </button>
+              <button
+                    onClick={() => void handleDelete(selectedEntry.id)}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    disabled={saving}
+              >
+                <Trash2 className="w-4 h-4" />
+                    {saving ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 p-8">
+          <div className="flex items-start justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                {selectedEntry.reason}
+              </h1>
+              <p className="text-gray-600">
+                Transaction ID: {selectedEntry.transactionId}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-3xl font-bold text-green-600">
+                {formatCurrency(selectedEntry.amount)}
+              </p>
+              <p className="text-sm text-gray-500 mt-1 capitalize">
+                {selectedEntry.incomeType}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm font-medium text-gray-500 mb-1">Source</p>
+                <p className="text-gray-900">{selectedEntry.source}</p>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-gray-500 mb-1">Payment Date</p>
+                <p className="text-gray-900">{formatDate(selectedEntry.paymentDate)}</p>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-gray-500 mb-1">Payment Method</p>
+                <p className="text-gray-900 capitalize">{selectedEntry.paymentMethod.replace('_', ' ')}</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm font-medium text-gray-500 mb-1">Payment To</p>
+                <p className="text-gray-900 capitalize">
+                  {selectedEntry.paymentTo === 'organization_bank'
+                    ? 'Organization Bank'
+                    : `Other Bank Account - ${selectedEntry.paidToUser}`
+                  }
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-gray-500 mb-1">Created At</p>
+                <p className="text-gray-900">{formatDate(selectedEntry.createdAt)}</p>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-gray-500 mb-1">Last Updated</p>
+                <p className="text-gray-900">{formatDate(selectedEntry.updatedAt)}</p>
+              </div>
+            </div>
+          </div>
+
+          {selectedEntry.description && (
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <p className="text-sm font-medium text-gray-500 mb-2">Description</p>
+              <p className="text-gray-900">{selectedEntry.description}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          Back to Finance Dashboard
+        </button>
+
+        {hasWriteAccess && (
+          <button
+            onClick={handleAddNew}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            disabled={saving}
+          >
+            <Plus className="w-5 h-5" />
+            Add Income
+          </button>
+        )}
+      </div>
+
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Income</h1>
+        <p className="mt-2 text-gray-600">
+          Total: {formatCurrency(totalAmount)} • {incomeEntries.length} entries
+        </p>
+        {error && (
+          <div className="mt-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            {error}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4">
+        {loading ? (
+          <div className="text-center text-gray-500 py-8">Loading income entries...</div>
+        ) : incomeEntries.length === 0 ? (
+          <div className="text-center text-gray-500 py-8">No income entries recorded yet.</div>
+        ) : (
+          incomeEntries.map((income) => (
+            <div
+              key={income.id}
+              onClick={() => handleViewDetail(income)}
+              className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow cursor-pointer"
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex gap-4 flex-1">
+                  <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <TrendingUp className="w-6 h-6 text-green-600" />
+                  </div>
+
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                      {income.reason}
+                    </h3>
+                    <p className="text-sm text-gray-600 mb-2">
+                      {income.source} • {formatDate(income.paymentDate)}
+                    </p>
+                    <div className="flex gap-2">
+                      <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded capitalize">
+                        {income.incomeType}
+                      </span>
+                      <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded capitalize">
+                        {income.paymentMethod.replace('_', ' ')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <p className="text-xl font-bold text-green-600">
+                    {formatCurrency(income.amount)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
