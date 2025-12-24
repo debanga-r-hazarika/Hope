@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
 import { TrendingUp, TrendingDown, DollarSign, ArrowRight, RefreshCcw, ShieldCheck } from 'lucide-react';
-import { fetchFinanceSummary } from '../lib/finance';
+import { fetchFinanceSummary, fetchRecentTransactions, type TransactionListItem } from '../lib/finance';
 import type { AccessLevel } from '../types/access';
 
 interface FinanceProps {
   onNavigateToSection: (section: 'contributions' | 'income' | 'expenses') => void;
   accessLevel: AccessLevel;
+  onOpenTransaction: (target: 'contribution' | 'income' | 'expense', txnId: string) => void;
 }
 
-export function Finance({ onNavigateToSection, accessLevel }: FinanceProps) {
+export function Finance({ onNavigateToSection, accessLevel, onOpenTransaction }: FinanceProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState({
@@ -18,7 +19,10 @@ export function Finance({ onNavigateToSection, accessLevel }: FinanceProps) {
     contributionsCount: 0,
     incomeCount: 0,
     expensesCount: 0,
+    ledgerIncome: 0,
   });
+  const [recent, setRecent] = useState<TransactionListItem[]>([]);
+  const [recentError, setRecentError] = useState<string | null>(null);
 
   const loadSummary = async () => {
     setLoading(true);
@@ -27,11 +31,12 @@ export function Finance({ onNavigateToSection, accessLevel }: FinanceProps) {
       const data = await fetchFinanceSummary();
       setSummary({
         totalContributions: data.contributions.totalAmount,
-        totalIncome: data.income.totalAmount,
+        totalIncome: data.ledgerIncome.totalAmount,
         totalExpenses: data.expenses.totalAmount,
         contributionsCount: data.contributions.count,
-        incomeCount: data.income.count,
+        incomeCount: data.ledgerIncome.count,
         expensesCount: data.expenses.count,
+        ledgerIncome: data.ledgerIncome.totalAmount,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load finance summary';
@@ -41,8 +46,20 @@ export function Finance({ onNavigateToSection, accessLevel }: FinanceProps) {
     }
   };
 
+  const loadRecent = async () => {
+    setRecentError(null);
+    try {
+      const data = await fetchRecentTransactions(8);
+      setRecent(data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load recent transactions';
+      setRecentError(message);
+    }
+  };
+
   useEffect(() => {
     void loadSummary();
+    void loadRecent();
   }, []);
 
   if (accessLevel === 'no-access') {
@@ -53,7 +70,7 @@ export function Finance({ onNavigateToSection, accessLevel }: FinanceProps) {
     );
   }
 
-  const netBalance = summary.totalIncome - summary.totalExpenses + summary.totalContributions;
+  const netBalance = summary.ledgerIncome - summary.totalExpenses;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -137,6 +154,16 @@ export function Finance({ onNavigateToSection, accessLevel }: FinanceProps) {
           <div className="w-20 h-20 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
             <DollarSign className="w-10 h-10" />
           </div>
+        </div>
+
+        <div className="mt-6">
+          <button
+            onClick={() => onNavigateToSection('income')}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
+          >
+            View All Transactions
+            <ArrowRight className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -251,6 +278,76 @@ export function Finance({ onNavigateToSection, accessLevel }: FinanceProps) {
               </div>
             </div>
           </div>
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Recent Transactions</h3>
+              <p className="text-sm text-gray-500">Incoming and outgoing</p>
+            </div>
+            <button
+              onClick={() => void loadRecent()}
+              className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              disabled={loading}
+            >
+              <RefreshCcw className="w-4 h-4" />
+              Refresh
+            </button>
+          </div>
+
+          {recentError && (
+            <div className="mb-3 text-sm text-red-600">
+              {recentError}
+            </div>
+          )}
+
+          {recent.length === 0 ? (
+            <div className="text-sm text-gray-500">No transactions yet.</div>
+          ) : (
+            <div className="space-y-3">
+              {recent.map((tx) => {
+                const isIncome = tx.type === 'income';
+                const isContribution = (tx.source ?? '').toLowerCase() === 'contribution';
+                return (
+                  <button
+                    key={`${tx.type}-${tx.id}`}
+                    onClick={() => {
+                      if (isIncome && isContribution) {
+                        onOpenTransaction('contribution', tx.transactionId);
+                      } else if (isIncome) {
+                        onOpenTransaction('income', tx.transactionId);
+                      } else {
+                        onOpenTransaction('expense', tx.transactionId);
+                      }
+                    }}
+                    className={`w-full text-left border rounded-lg px-4 py-3 hover:shadow-sm transition ${
+                      isIncome ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+                    } ${isContribution ? 'ring-2 ring-blue-100' : ''}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">
+                          {isContribution ? `CONTRIBUTION-${tx.transactionId}` : tx.transactionId}
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          {tx.reason}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-sm font-bold ${isIncome ? 'text-green-700' : 'text-red-700'}`}>
+                          {isIncome ? '+' : '-'}{formatCurrency(tx.amount)}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {new Date(tx.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

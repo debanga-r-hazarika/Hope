@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Plus, Edit2, Trash2, TrendingUp, ExternalLink } from 'lucide-react';
 import { IncomeEntry } from '../types/finance';
 import { IncomeForm } from '../components/IncomeForm';
@@ -16,9 +16,10 @@ interface IncomeProps {
   onBack: () => void;
   hasWriteAccess: boolean;
   onViewContribution?: (transactionId: string) => void;
+  focusTransactionId?: string | null;
 }
 
-export function Income({ onBack, hasWriteAccess, onViewContribution }: IncomeProps) {
+export function Income({ onBack, hasWriteAccess, onViewContribution, focusTransactionId }: IncomeProps) {
   const { userId: currentUserId } = useModuleAccess();
   const [view, setView] = useState<'list' | 'detail' | 'form'>('list');
   const [selectedEntry, setSelectedEntry] = useState<IncomeEntry | null>(null);
@@ -33,7 +34,7 @@ export function Income({ onBack, hasWriteAccess, onViewContribution }: IncomePro
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'>('date_desc');
   const [showContribution, setShowContribution] = useState(true);
 
-  const loadIncome = async () => {
+  const loadIncome = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -45,7 +46,7 @@ export function Income({ onBack, hasWriteAccess, onViewContribution }: IncomePro
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void loadIncome();
@@ -59,7 +60,33 @@ export function Income({ onBack, hasWriteAccess, onViewContribution }: IncomePro
         });
         setUsersLookup(map);
       });
-  }, []);
+  }, [loadIncome]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('income-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'income' },
+        () => {
+          void loadIncome();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [loadIncome]);
+
+  useEffect(() => {
+    if (!focusTransactionId || incomeEntries.length === 0) return;
+    const match = incomeEntries.find((i) => i.transactionId === focusTransactionId);
+    if (match) {
+      setSelectedEntry(match);
+      setView('detail');
+    }
+  }, [focusTransactionId, incomeEntries]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -165,14 +192,14 @@ export function Income({ onBack, hasWriteAccess, onViewContribution }: IncomePro
       items = items.filter((i) =>
         i.reason.toLowerCase().includes(term) ||
         i.transactionId.toLowerCase().includes(term) ||
-        i.source.toLowerCase().includes(term)
+        (i.source ?? '').toLowerCase().includes(term)
       );
     }
     if (filterType !== 'all') {
       items = items.filter((i) => i.incomeType === filterType);
     }
     if (!showContribution) {
-      items = items.filter((i) => i.source?.toLowerCase() !== 'contribution');
+      items = items.filter((i) => (i.source ?? '').toLowerCase() !== 'contribution');
     }
     items.sort((a, b) => {
       switch (sortBy) {
@@ -184,7 +211,7 @@ export function Income({ onBack, hasWriteAccess, onViewContribution }: IncomePro
       }
     });
     return items;
-  }, [incomeEntries, search, filterType, sortBy]);
+  }, [incomeEntries, search, filterType, sortBy, showContribution]);
 
   const totalAmount = incomeEntries.reduce((sum, e) => sum + e.amount, 0);
 
@@ -210,35 +237,36 @@ export function Income({ onBack, hasWriteAccess, onViewContribution }: IncomePro
             Back to List
           </button>
 
-          {hasWriteAccess && (
+        {hasWriteAccess && isContributionIncome && onViewContribution && (
             <div className="flex gap-2">
               <button
-                onClick={() => handleEdit(selectedEntry)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
-                disabled={isContributionIncome}
+                onClick={() => onViewContribution(selectedEntry.transactionId)}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
               >
-                <Edit2 className="w-4 h-4" />
-                {isContributionIncome ? 'Edit disabled (contribution)' : 'Edit'}
+                <ExternalLink className="w-4 h-4" />
+                View Contribution
               </button>
-              <button
-                onClick={() => void handleDelete(selectedEntry.id)}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-60"
-                disabled={saving || isContributionIncome}
-              >
-                <Trash2 className="w-4 h-4" />
-                {saving ? 'Deleting...' : isContributionIncome ? 'Delete disabled' : 'Delete'}
-              </button>
-              {isContributionIncome && onViewContribution && (
-                <button
-                  onClick={() => onViewContribution(selectedEntry.transactionId)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  View Contribution
-                </button>
-              )}
             </div>
           )}
+        {hasWriteAccess && !isContributionIncome && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleEdit(selectedEntry)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Edit2 className="w-4 h-4" />
+              Edit
+            </button>
+            <button
+              onClick={() => void handleDelete(selectedEntry.id)}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              disabled={saving}
+            >
+              <Trash2 className="w-4 h-4" />
+              {saving ? 'Deleting...' : 'Delete'}
+            </button>
+          </div>
+        )}
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-8">

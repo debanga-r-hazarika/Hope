@@ -185,9 +185,9 @@ export async function fetchContributions() {
 
 export async function createContribution(
   payload: Partial<ContributionEntry>,
-  options?: { mirrorToIncome?: boolean; currentUserId?: string | null }
+  options?: { currentUserId?: string | null }
 ) {
-  const transactionId = payload.transactionId || await generateTransactionId('INC', ['contributions', 'income']);
+  const transactionId = payload.transactionId || await generateTransactionId('INC', ['contributions']);
 
   const { data, error } = await supabase
     .from('contributions')
@@ -196,29 +196,7 @@ export async function createContribution(
     .single();
 
   if (error) throw new Error(error.message);
-  const contribution = mapContributionRow(data as ContributionRow);
-
-  const shouldMirror = options?.mirrorToIncome !== false;
-  if (shouldMirror) {
-    const incomePayload: Partial<IncomeEntry> = {
-      amount: contribution.amount,
-      reason: contribution.reason,
-      transactionId,
-      paymentTo: contribution.paymentTo,
-      paidToUser: contribution.paidToUser ?? undefined,
-      paymentDate: contribution.paymentDate,
-      paymentMethod: contribution.paymentMethod,
-      bankReference: contribution.bankReference ?? null,
-      evidenceUrl: contribution.evidenceUrl ?? null,
-      description: contribution.description ?? `Generated from contribution ${transactionId}`,
-      source: 'Contribution',
-      incomeType: 'other',
-      category: contribution.category ?? null,
-    };
-    await createIncome(incomePayload, { currentUserId: options?.currentUserId ?? null });
-  }
-
-  return contribution;
+  return mapContributionRow(data as ContributionRow);
 }
 
 export async function updateContribution(
@@ -243,11 +221,7 @@ export async function deleteContribution(id: string) {
 }
 
 export async function fetchIncome() {
-  const { data, error } = await supabase
-    .from('income')
-    .select('*')
-    .order('payment_date', { ascending: false });
-
+  const { data, error } = await supabase.rpc('income_combined');
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) => mapIncomeRow(row as IncomeRow));
 }
@@ -354,10 +328,88 @@ export async function fetchFinanceSummary() {
     fetchSummaryForTable('expenses'),
   ]);
 
+  // Ledger: unique income by transaction_id to avoid double-counting mirrored contributions
+  const { data: incomeRows, error: incomeLedgerError } = await supabase
+    .from('income')
+    .select('transaction_id, amount');
+  if (incomeLedgerError) throw new Error(incomeLedgerError.message);
+
+  const seen = new Set<string>();
+  let ledgerIncomeTotal = 0;
+  let ledgerIncomeCount = 0;
+  (incomeRows ?? []).forEach((row) => {
+    const txn = (row as { transaction_id?: string }).transaction_id;
+    const amt = toNumber((row as { amount: number | string }).amount);
+    if (txn && !seen.has(txn)) {
+      seen.add(txn);
+      ledgerIncomeTotal += amt;
+      ledgerIncomeCount += 1;
+    }
+  });
+
   return {
     contributions,
     income,
     expenses,
+    ledgerIncome: {
+      totalAmount: ledgerIncomeTotal,
+      count: ledgerIncomeCount,
+    },
+    netIncome: ledgerIncomeTotal,
   };
+}
+
+export type TransactionListItem = {
+  id: string;
+  transactionId: string;
+  amount: number;
+  date: string;
+  reason: string;
+  type: 'income' | 'expense';
+  source?: string | null;
+};
+
+export async function fetchRecentTransactions(limit = 10): Promise<TransactionListItem[]> {
+  const [incomeRes, expenseRes] = await Promise.all([
+    supabase
+      .from('income')
+      .select('id, transaction_id, amount, payment_date, reason, source')
+      .order('payment_date', { ascending: false })
+      .limit(limit),
+    supabase
+      .from('expenses')
+      .select('id, transaction_id, amount, payment_date, reason')
+      .order('payment_date', { ascending: false })
+      .limit(limit),
+  ]);
+
+  if (incomeRes.error) throw new Error(incomeRes.error.message);
+  if (expenseRes.error) throw new Error(expenseRes.error.message);
+
+  const incomeItems: TransactionListItem[] = (incomeRes.data ?? []).map((row) => ({
+    id: (row as { id: string }).id,
+    transactionId: (row as { transaction_id: string }).transaction_id,
+    amount: toNumber((row as { amount: number | string }).amount),
+    date: (row as { payment_date: string }).payment_date,
+    reason: (row as { reason: string }).reason,
+    type: 'income',
+    source: (row as { source?: string | null }).source ?? null,
+  }));
+
+  const expenseItems: TransactionListItem[] = (expenseRes.data ?? []).map((row) => ({
+    id: (row as { id: string }).id,
+    transactionId: (row as { transaction_id: string }).transaction_id,
+    amount: toNumber((row as { amount: number | string }).amount),
+    date: (row as { payment_date: string }).payment_date,
+    reason: (row as { reason: string }).reason,
+    type: 'expense',
+    source: null,
+  }));
+
+  const combined = [...incomeItems, ...expenseItems].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+
+  return combined.slice(0, limit);
 }
 

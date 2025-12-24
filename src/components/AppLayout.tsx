@@ -24,6 +24,8 @@ export function AppLayout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [financeSection, setFinanceSection] = useState<FinanceSection>('dashboard');
   const [focusContributionTxnId, setFocusContributionTxnId] = useState<string | null>(null);
+  const [focusIncomeTxnId, setFocusIncomeTxnId] = useState<string | null>(null);
+  const [focusExpenseTxnId, setFocusExpenseTxnId] = useState<string | null>(null);
 
   const handleLogout = async () => {
     await signOut();
@@ -44,6 +46,8 @@ export function AppLayout() {
       setSelectedUserId(null);
       setFinanceSection('dashboard');
       setFocusContributionTxnId(null);
+      setFocusIncomeTxnId(null);
+      setFocusExpenseTxnId(null);
       setIsMobileMenuOpen(false);
       return;
     }
@@ -52,6 +56,8 @@ export function AppLayout() {
     setSelectedUserId(null);
     setFinanceSection('dashboard');
     setFocusContributionTxnId(null);
+    setFocusIncomeTxnId(null);
+    setFocusExpenseTxnId(null);
     setIsMobileMenuOpen(false);
   };
 
@@ -59,6 +65,12 @@ export function AppLayout() {
     setFinanceSection(section);
     if (section !== 'contributions') {
       setFocusContributionTxnId(null);
+    }
+    if (section !== 'income') {
+      setFocusIncomeTxnId(null);
+    }
+    if (section !== 'expenses') {
+      setFocusExpenseTxnId(null);
     }
   };
 
@@ -105,6 +117,18 @@ export function AppLayout() {
             <Finance
               onNavigateToSection={(section) => handleFinanceNavigate(section)}
               accessLevel={financeAccessLevel}
+              onOpenTransaction={(target, txnId) => {
+                if (target === 'contribution') {
+                  setFocusContributionTxnId(txnId);
+                  handleFinanceNavigate('contributions');
+                } else if (target === 'income') {
+                  setFocusIncomeTxnId(txnId);
+                  handleFinanceNavigate('income');
+                } else {
+                  setFocusExpenseTxnId(txnId);
+                  handleFinanceNavigate('expenses');
+                }
+              }}
             />
           );
         case 'contributions':
@@ -120,6 +144,7 @@ export function AppLayout() {
             <Income
               onBack={() => handleFinanceNavigate('dashboard')}
               hasWriteAccess={hasWriteAccess}
+              focusTransactionId={focusIncomeTxnId}
               onViewContribution={(txnId) => {
                 setFocusContributionTxnId(txnId);
                 handleFinanceNavigate('contributions');
@@ -131,6 +156,7 @@ export function AppLayout() {
             <Expenses
               onBack={() => handleFinanceNavigate('dashboard')}
               hasWriteAccess={hasWriteAccess}
+              focusTransactionId={focusExpenseTxnId}
             />
           );
         default:

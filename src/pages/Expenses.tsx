@@ -15,9 +15,10 @@ import { useModuleAccess } from '../contexts/ModuleAccessContext';
 interface ExpensesProps {
   onBack: () => void;
   hasWriteAccess: boolean;
+  focusTransactionId?: string | null;
 }
 
-export function Expenses({ onBack, hasWriteAccess }: ExpensesProps) {
+export function Expenses({ onBack, hasWriteAccess, focusTransactionId }: ExpensesProps) {
   const { userId: currentUserId } = useModuleAccess();
   const [view, setView] = useState<'list' | 'detail' | 'form'>('list');
   const [selectedEntry, setSelectedEntry] = useState<ExpenseEntry | null>(null);
@@ -58,6 +59,15 @@ export function Expenses({ onBack, hasWriteAccess }: ExpensesProps) {
         setUsersLookup(map);
       });
   }, []);
+
+  useEffect(() => {
+    if (!focusTransactionId || expenseEntries.length === 0) return;
+    const match = expenseEntries.find((e) => e.transactionId === focusTransactionId);
+    if (match) {
+      setSelectedEntry(match);
+      setView('detail');
+    }
+  }, [focusTransactionId, expenseEntries]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
