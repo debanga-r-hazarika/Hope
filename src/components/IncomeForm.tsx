@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 
 interface IncomeFormProps {
   entry: IncomeEntry | null;
-  onSave: (data: Partial<IncomeEntry>) => void;
+  onSave: (data: Partial<IncomeEntry>, evidenceFile?: File | null) => void;
   onCancel: () => void;
 }
 
@@ -23,25 +23,29 @@ export function IncomeForm({ entry, onSave, onCancel }: IncomeFormProps) {
     source: entry?.source || '',
     incomeType: entry?.incomeType || 'sales' as 'sales' | 'service' | 'interest' | 'other',
     description: entry?.description || '',
+    evidenceUrl: entry?.evidenceUrl || '',
   });
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
 
   useEffect(() => {
-    supabase
-      .from('users')
-      .select('id, full_name')
-      .then(({ data, error }) => {
+    const loadUsers = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('id, full_name');
         if (error) {
           setUserFetchError(error.message);
           setUsers([]);
-        } else {
-          setUsers((data ?? []) as Array<{ id: string; full_name: string }>);
-          setUserFetchError(null);
+          return;
         }
-      })
-      .catch((err) => {
+        setUsers((data ?? []) as Array<{ id: string; full_name: string }>);
+        setUserFetchError(null);
+      } catch (err) {
         setUserFetchError(err instanceof Error ? err.message : 'Failed to load users');
         setUsers([]);
-      });
+      }
+    };
+    void loadUsers();
   }, []);
 
   const handleChange = (
@@ -56,7 +60,7 @@ export function IncomeForm({ entry, onSave, onCancel }: IncomeFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    onSave(formData, evidenceFile);
   };
 
   return (
@@ -164,6 +168,32 @@ export function IncomeForm({ entry, onSave, onCancel }: IncomeFormProps) {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Bank transaction reference"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Evidence (Image/PDF)
+            </label>
+            <label className="flex items-center justify-between px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition-colors">
+              <span className="text-sm text-gray-700">
+                {evidenceFile ? evidenceFile.name : 'Upload payment proof'}
+              </span>
+              <span className="text-xs text-gray-500">PNG/JPG/PDF</span>
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  setEvidenceFile(file);
+                }}
+              />
+            </label>
+            {formData.evidenceUrl && !evidenceFile && (
+              <p className="mt-2 text-xs text-blue-600 truncate">
+                Existing: <a href={formData.evidenceUrl} target="_blank" rel="noreferrer" className="underline">View</a>
+              </p>
+            )}
           </div>
 
           <div>

@@ -16,3 +16,8 @@ ALTER TABLE contributions ADD COLUMN IF NOT EXISTS bank_reference text;
 ALTER TABLE income ADD COLUMN IF NOT EXISTS bank_reference text;
 ALTER TABLE expenses ADD COLUMN IF NOT EXISTS bank_reference text;
 
+-- Evidence attachment URLs for finance entries
+ALTER TABLE contributions ADD COLUMN IF NOT EXISTS evidence_url text;
+ALTER TABLE income ADD COLUMN IF NOT EXISTS evidence_url text;
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS evidence_url text;
+

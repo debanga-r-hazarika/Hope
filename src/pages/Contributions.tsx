@@ -7,6 +7,7 @@ import {
   createContribution,
   updateContribution,
   deleteContribution,
+  uploadEvidence,
 } from '../lib/finance';
 import { supabase } from '../lib/supabase';
 import { useModuleAccess } from '../contexts/ModuleAccessContext';
@@ -27,6 +28,9 @@ export function Contributions({ onBack, hasWriteAccess, focusTransactionId }: Co
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [usersLookup, setUsersLookup] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState('');
+  const [filterType, setFilterType] = useState<'all' | ContributionEntry['contributionType']>('all');
+  const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'>('date_desc');
 
   const loadContributions = async () => {
     setLoading(true);
@@ -119,7 +123,7 @@ export function Contributions({ onBack, hasWriteAccess, focusTransactionId }: Co
     }
   };
 
-  const handleSave = async (data: Partial<ContributionEntry>) => {
+  const handleSave = async (data: Partial<ContributionEntry>, evidenceFile?: File | null) => {
     if (!hasWriteAccess) {
       setError('You only have read-only access to Finance.');
       return;
@@ -127,14 +131,21 @@ export function Contributions({ onBack, hasWriteAccess, focusTransactionId }: Co
     setSaving(true);
     setError(null);
     try {
+      let evidenceUrl = data.evidenceUrl ?? selectedEntry?.evidenceUrl ?? null;
+      if (evidenceFile) {
+        evidenceUrl = await uploadEvidence(evidenceFile, 'contributions');
+      }
+
+      const payload = { ...data, evidenceUrl };
+
       if (isEditing && selectedEntry) {
-        const updated = await updateContribution(selectedEntry.id, data, { currentUserId });
+        const updated = await updateContribution(selectedEntry.id, payload, { currentUserId });
         setContributions((prev) =>
           prev.map((c) => (c.id === updated.id ? updated : c))
         );
         setSelectedEntry(updated);
       } else {
-        const created = await createContribution(data, { currentUserId });
+        const created = await createContribution(payload, { currentUserId });
         setContributions((prev) => [created, ...prev]);
       }
       setView('list');
@@ -150,6 +161,30 @@ export function Contributions({ onBack, hasWriteAccess, focusTransactionId }: Co
     if (!userId) return '—';
     return usersLookup[userId] || userId;
   }, [usersLookup]);
+
+  const filtered = useMemo(() => {
+    let items = [...contributions];
+    if (search.trim()) {
+      const term = search.toLowerCase();
+      items = items.filter((c) =>
+        c.reason.toLowerCase().includes(term) ||
+        c.transactionId.toLowerCase().includes(term)
+      );
+    }
+    if (filterType !== 'all') {
+      items = items.filter((c) => c.contributionType === filterType);
+    }
+    items.sort((a, b) => {
+      switch (sortBy) {
+        case 'amount_desc': return b.amount - a.amount;
+        case 'amount_asc': return a.amount - b.amount;
+        case 'date_asc': return new Date(a.paymentDate).getTime() - new Date(b.paymentDate).getTime();
+        case 'date_desc':
+        default: return new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime();
+      }
+    });
+    return items;
+  }, [contributions, search, filterType, sortBy]);
 
   const totalAmount = contributions.reduce((sum, c) => sum + c.amount, 0);
 
@@ -213,6 +248,11 @@ export function Contributions({ onBack, hasWriteAccess, focusTransactionId }: Co
                   Payment Reference: {selectedEntry.bankReference}
                 </p>
               )}
+          {selectedEntry.evidenceUrl && (
+            <p className="text-sm text-blue-600 mt-1">
+              Evidence: <a href={selectedEntry.evidenceUrl} target="_blank" rel="noreferrer" className="underline">View</a>
+            </p>
+          )}
             </div>
             <div className="text-right">
               <p className="text-3xl font-bold text-green-600">
@@ -306,13 +346,43 @@ export function Contributions({ onBack, hasWriteAccess, focusTransactionId }: Co
         )}
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search reason or TXN"
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        />
+        <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value as typeof filterType)}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="all">All types</option>
+          <option value="capital">Capital</option>
+          <option value="investment">Investment</option>
+          <option value="loan">Loan</option>
+          <option value="other">Other</option>
+        </select>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="date_desc">Newest first</option>
+          <option value="date_asc">Oldest first</option>
+          <option value="amount_desc">Amount high → low</option>
+          <option value="amount_asc">Amount low → high</option>
+        </select>
+      </div>
+
       <div className="grid grid-cols-1 gap-4">
         {loading ? (
           <div className="text-center text-gray-500 py-8">Loading contributions...</div>
-        ) : contributions.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <div className="text-center text-gray-500 py-8">No contributions recorded yet.</div>
         ) : (
-          contributions.map((contribution) => (
+          filtered.map((contribution) => (
             <div
               key={contribution.id}
               onClick={() => handleViewDetail(contribution)}

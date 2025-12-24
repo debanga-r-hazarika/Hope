@@ -20,6 +20,8 @@ interface UserData {
   aadhar_number?: string | null;
   pan_number?: string | null;
   employee_code?: string | null;
+  date_of_birth?: string | null;
+  address?: string | null;
 }
 
 export function UserDetail({ userId, onBack }: UserDetailProps) {
@@ -57,8 +59,8 @@ export function UserDetail({ userId, onBack }: UserDetailProps) {
       setIsAdmin(admin);
 
       const baseSelect = admin
-        ? 'id, full_name, email, role, is_active, department, created_at, partner_code, aadhar_number, pan_number, employee_code'
-        : 'id, full_name, email, is_active, department, created_at, employee_code';
+        ? 'id, full_name, email, role, is_active, department, created_at, partner_code, aadhar_number, pan_number, employee_code, date_of_birth, address'
+        : 'id, full_name, email, is_active, department, created_at, employee_code, date_of_birth';
 
       const { data, error } = await supabase
         .from('users')
@@ -170,6 +172,8 @@ export function UserDetail({ userId, onBack }: UserDetailProps) {
                         partner_code: editableUser.partner_code ?? null,
                         aadhar_number: editableUser.aadhar_number ?? null,
                         pan_number: editableUser.pan_number ?? null,
+                        date_of_birth: editableUser.date_of_birth ?? null,
+                        address: editableUser.address ?? null,
                       })
                       .eq('id', editableUser.id);
                     if (updateError) {
@@ -276,6 +280,15 @@ export function UserDetail({ userId, onBack }: UserDetailProps) {
                   />
                 </div>
                 <div className="py-4 border-b border-gray-200">
+                  <label className="block text-sm font-medium text-gray-500 mb-2">Date of Birth</label>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={editableUser?.date_of_birth || ''}
+                    onChange={(e) => setEditableUser((prev) => prev ? { ...prev, date_of_birth: e.target.value } : prev)}
+                  />
+                </div>
+                <div className="py-4 border-b border-gray-200">
                   <label className="block text-sm font-medium text-gray-500 mb-2">Role</label>
                   <select
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -309,6 +322,15 @@ export function UserDetail({ userId, onBack }: UserDetailProps) {
                   />
                 </div>
                 <div className="py-4 border-b border-gray-200">
+                  <label className="block text-sm font-medium text-gray-500 mb-2">Address (admin only)</label>
+                  <textarea
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    rows={3}
+                    value={editableUser?.address || ''}
+                    onChange={(e) => setEditableUser((prev) => prev ? { ...prev, address: e.target.value } : prev)}
+                  />
+                </div>
+                <div className="py-4 border-b border-gray-200">
                   <label className="block text-sm font-medium text-gray-500 mb-2">Aadhar Number</label>
                   <input
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -332,6 +354,7 @@ export function UserDetail({ userId, onBack }: UserDetailProps) {
                 {renderField('Email Address', user.email)}
                 {renderField('Employee Code', user.employee_code || undefined)}
                 {renderField('Lead', user.department || undefined)}
+                {renderField('Date of Birth', user.date_of_birth || undefined)}
                 {renderField('Status', displayStatus(user.is_active), true)}
                 {renderField('Joined', user.created_at ? new Date(user.created_at).toLocaleDateString() : undefined)}
               </>

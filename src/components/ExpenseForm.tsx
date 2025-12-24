@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 
 interface ExpenseFormProps {
   entry: ExpenseEntry | null;
-  onSave: (data: Partial<ExpenseEntry>) => void;
+  onSave: (data: Partial<ExpenseEntry>, evidenceFile?: File | null) => void;
   onCancel: () => void;
 }
 
@@ -22,16 +22,26 @@ export function ExpenseForm({ entry, onSave, onCancel }: ExpenseFormProps) {
     vendor: entry?.vendor || '',
     expenseType: entry?.expenseType || 'operational' as 'operational' | 'salary' | 'utilities' | 'maintenance' | 'other',
     description: entry?.description || '',
+    evidenceUrl: entry?.evidenceUrl || '',
   });
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
 
   useEffect(() => {
-    supabase
-      .from('users')
-      .select('id, full_name')
-      .then(({ data }) => {
+    const loadUsers = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('id, full_name');
+        if (error) {
+          setUsers([]);
+          return;
+        }
         setUsers((data ?? []) as Array<{ id: string; full_name: string }>);
-      })
-      .catch(() => setUsers([]));
+      } catch {
+        setUsers([]);
+      }
+    };
+    void loadUsers();
   }, []);
 
   const handleChange = (
@@ -46,7 +56,7 @@ export function ExpenseForm({ entry, onSave, onCancel }: ExpenseFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    onSave(formData, evidenceFile);
   };
 
   return (
@@ -149,6 +159,32 @@ export function ExpenseForm({ entry, onSave, onCancel }: ExpenseFormProps) {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Bank transaction reference"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Evidence (Image/PDF)
+            </label>
+            <label className="flex items-center justify-between px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition-colors">
+              <span className="text-sm text-gray-700">
+                {evidenceFile ? evidenceFile.name : 'Upload payment proof'}
+              </span>
+              <span className="text-xs text-gray-500">PNG/JPG/PDF</span>
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  setEvidenceFile(file);
+                }}
+              />
+            </label>
+            {formData.evidenceUrl && !evidenceFile && (
+              <p className="mt-2 text-xs text-blue-600 truncate">
+                Existing: <a href={formData.evidenceUrl} target="_blank" rel="noreferrer" className="underline">View</a>
+              </p>
+            )}
           </div>
 
           <div>

@@ -7,6 +7,7 @@ import {
   createIncome,
   updateIncome,
   deleteIncome,
+  uploadEvidence,
 } from '../lib/finance';
 import { supabase } from '../lib/supabase';
 import { useModuleAccess } from '../contexts/ModuleAccessContext';
@@ -27,6 +28,10 @@ export function Income({ onBack, hasWriteAccess, onViewContribution }: IncomePro
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [usersLookup, setUsersLookup] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState('');
+  const [filterType, setFilterType] = useState<'all' | IncomeEntry['incomeType']>('all');
+  const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'>('date_desc');
+  const [showContribution, setShowContribution] = useState(true);
 
   const loadIncome = async () => {
     setLoading(true);
@@ -110,7 +115,7 @@ export function Income({ onBack, hasWriteAccess, onViewContribution }: IncomePro
     }
   };
 
-  const handleSave = async (data: Partial<IncomeEntry>) => {
+  const handleSave = async (data: Partial<IncomeEntry>, evidenceFile?: File | null) => {
     if (!hasWriteAccess) {
       setError('You only have read-only access to Finance.');
       return;
@@ -118,14 +123,21 @@ export function Income({ onBack, hasWriteAccess, onViewContribution }: IncomePro
     setSaving(true);
     setError(null);
     try {
+      let evidenceUrl = data.evidenceUrl ?? selectedEntry?.evidenceUrl ?? null;
+      if (evidenceFile) {
+        evidenceUrl = await uploadEvidence(evidenceFile, 'income');
+      }
+
+      const payload = { ...data, evidenceUrl };
+
       if (isEditing && selectedEntry) {
-        const updated = await updateIncome(selectedEntry.id, data, { currentUserId });
+        const updated = await updateIncome(selectedEntry.id, payload, { currentUserId });
         setIncomeEntries((prev) =>
           prev.map((e) => (e.id === updated.id ? updated : e))
         );
         setSelectedEntry(updated);
       } else {
-        const created = await createIncome(data, { currentUserId });
+        const created = await createIncome(payload, { currentUserId });
         setIncomeEntries((prev) => [created, ...prev]);
       }
       setView('list');
@@ -145,6 +157,34 @@ export function Income({ onBack, hasWriteAccess, onViewContribution }: IncomePro
     if (!userId) return '—';
     return usersLookup[userId] || userId;
   }, [usersLookup]);
+
+  const filtered = useMemo(() => {
+    let items = [...incomeEntries];
+    if (search.trim()) {
+      const term = search.toLowerCase();
+      items = items.filter((i) =>
+        i.reason.toLowerCase().includes(term) ||
+        i.transactionId.toLowerCase().includes(term) ||
+        i.source.toLowerCase().includes(term)
+      );
+    }
+    if (filterType !== 'all') {
+      items = items.filter((i) => i.incomeType === filterType);
+    }
+    if (!showContribution) {
+      items = items.filter((i) => i.source?.toLowerCase() !== 'contribution');
+    }
+    items.sort((a, b) => {
+      switch (sortBy) {
+        case 'amount_desc': return b.amount - a.amount;
+        case 'amount_asc': return a.amount - b.amount;
+        case 'date_asc': return new Date(a.paymentDate).getTime() - new Date(b.paymentDate).getTime();
+        case 'date_desc':
+        default: return new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime();
+      }
+    });
+    return items;
+  }, [incomeEntries, search, filterType, sortBy]);
 
   const totalAmount = incomeEntries.reduce((sum, e) => sum + e.amount, 0);
 
@@ -217,6 +257,11 @@ export function Income({ onBack, hasWriteAccess, onViewContribution }: IncomePro
               {selectedEntry.bankReference && (
                 <p className="text-sm text-gray-500 mt-1">
                   Payment Reference: {selectedEntry.bankReference}
+                </p>
+              )}
+              {selectedEntry.evidenceUrl && (
+                <p className="text-sm text-blue-600 mt-1">
+                  Evidence: <a href={selectedEntry.evidenceUrl} target="_blank" rel="noreferrer" className="underline">View</a>
                 </p>
               )}
               {isContributionIncome && (
@@ -322,17 +367,60 @@ export function Income({ onBack, hasWriteAccess, onViewContribution }: IncomePro
         )}
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search reason, source, or TXN"
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        />
+        <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value as typeof filterType)}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="all">All types</option>
+          <option value="sales">Sales</option>
+          <option value="service">Service</option>
+          <option value="interest">Interest</option>
+          <option value="other">Other</option>
+        </select>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="date_desc">Newest first</option>
+          <option value="date_asc">Oldest first</option>
+          <option value="amount_desc">Amount high → low</option>
+          <option value="amount_asc">Amount low → high</option>
+        </select>
+        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={showContribution}
+            onChange={(e) => setShowContribution(e.target.checked)}
+            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          Show contribution-linked income
+        </label>
+      </div>
+
       <div className="grid grid-cols-1 gap-4">
         {loading ? (
           <div className="text-center text-gray-500 py-8">Loading income entries...</div>
-        ) : incomeEntries.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <div className="text-center text-gray-500 py-8">No income entries recorded yet.</div>
         ) : (
-          incomeEntries.map((income) => (
+          filtered.map((income) => {
+            const isContrib = income.source?.toLowerCase() === 'contribution';
+            return (
             <div
               key={income.id}
               onClick={() => handleViewDetail(income)}
-              className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow cursor-pointer"
+              className={`rounded-lg border p-6 hover:shadow-md transition-shadow cursor-pointer ${
+                isContrib ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'
+              }`}
             >
               <div className="flex items-start justify-between">
                 <div className="flex gap-4 flex-1">
@@ -367,7 +455,8 @@ export function Income({ onBack, hasWriteAccess, onViewContribution }: IncomePro
                 </div>
               </div>
             </div>
-          ))
+          );
+          })
         )}
       </div>
     </div>

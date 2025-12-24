@@ -11,6 +11,7 @@ export interface FinanceEntry {
   paymentDate: string;
   paymentMethod: PaymentMethod;
   bankReference?: string | null;
+  evidenceUrl?: string | null;
   description?: string | null;
   category?: string | null;
   createdAt: string;

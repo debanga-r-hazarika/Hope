@@ -7,6 +7,7 @@ import {
   createExpense,
   updateExpense,
   deleteExpense,
+  uploadEvidence,
 } from '../lib/finance';
 import { supabase } from '../lib/supabase';
 import { useModuleAccess } from '../contexts/ModuleAccessContext';
@@ -26,6 +27,9 @@ export function Expenses({ onBack, hasWriteAccess }: ExpensesProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [usersLookup, setUsersLookup] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState('');
+  const [filterType, setFilterType] = useState<'all' | ExpenseEntry['expenseType']>('all');
+  const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'>('date_desc');
 
   const loadExpenses = async () => {
     setLoading(true);
@@ -109,7 +113,7 @@ export function Expenses({ onBack, hasWriteAccess }: ExpensesProps) {
     }
   };
 
-  const handleSave = async (data: Partial<ExpenseEntry>) => {
+  const handleSave = async (data: Partial<ExpenseEntry>, evidenceFile?: File | null) => {
     if (!hasWriteAccess) {
       setError('You only have read-only access to Finance.');
       return;
@@ -117,14 +121,21 @@ export function Expenses({ onBack, hasWriteAccess }: ExpensesProps) {
     setSaving(true);
     setError(null);
     try {
+      let evidenceUrl = data.evidenceUrl ?? selectedEntry?.evidenceUrl ?? null;
+      if (evidenceFile) {
+        evidenceUrl = await uploadEvidence(evidenceFile, 'expenses');
+      }
+
+      const payload = { ...data, evidenceUrl };
+
       if (isEditing && selectedEntry) {
-        const updated = await updateExpense(selectedEntry.id, data, { currentUserId });
+        const updated = await updateExpense(selectedEntry.id, payload, { currentUserId });
         setExpenseEntries((prev) =>
           prev.map((e) => (e.id === updated.id ? updated : e))
         );
         setSelectedEntry(updated);
       } else {
-        const created = await createExpense(data, { currentUserId });
+        const created = await createExpense(payload, { currentUserId });
         setExpenseEntries((prev) => [created, ...prev]);
       }
       setView('list');
@@ -135,6 +146,31 @@ export function Expenses({ onBack, hasWriteAccess }: ExpensesProps) {
       setSaving(false);
     }
   };
+
+  const filtered = useMemo(() => {
+    let items = [...expenseEntries];
+    if (search.trim()) {
+      const term = search.toLowerCase();
+      items = items.filter((e) =>
+        e.reason.toLowerCase().includes(term) ||
+        e.transactionId.toLowerCase().includes(term) ||
+        (e.vendor ?? '').toLowerCase().includes(term)
+      );
+    }
+    if (filterType !== 'all') {
+      items = items.filter((e) => e.expenseType === filterType);
+    }
+    items.sort((a, b) => {
+      switch (sortBy) {
+        case 'amount_desc': return b.amount - a.amount;
+        case 'amount_asc': return a.amount - b.amount;
+        case 'date_asc': return new Date(a.paymentDate).getTime() - new Date(b.paymentDate).getTime();
+        case 'date_desc':
+        default: return new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime();
+      }
+    });
+    return items;
+  }, [expenseEntries, search, filterType, sortBy]);
 
   const totalAmount = expenseEntries.reduce((sum, e) => sum + e.amount, 0);
   const lookupName = useMemo(() => (userId?: string | null) => {
@@ -223,6 +259,19 @@ export function Expenses({ onBack, hasWriteAccess }: ExpensesProps) {
                   <p className="text-gray-900">{selectedEntry.bankReference}</p>
                 </div>
               )}
+              {selectedEntry.evidenceUrl && (
+                <div>
+                  <p className="text-sm font-medium text-gray-500 mb-1">Evidence</p>
+                  <a
+                    href={selectedEntry.evidenceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-blue-600 underline text-sm"
+                  >
+                    View attachment
+                  </a>
+                </div>
+              )}
 
               <div>
                 <p className="text-sm font-medium text-gray-500 mb-1">Payment Date</p>
@@ -304,13 +353,44 @@ export function Expenses({ onBack, hasWriteAccess }: ExpensesProps) {
         )}
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search reason, vendor, or TXN"
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        />
+        <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value as typeof filterType)}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="all">All types</option>
+          <option value="operational">Operational</option>
+          <option value="salary">Salary</option>
+          <option value="utilities">Utilities</option>
+          <option value="maintenance">Maintenance</option>
+          <option value="other">Other</option>
+        </select>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="date_desc">Newest first</option>
+          <option value="date_asc">Oldest first</option>
+          <option value="amount_desc">Amount high → low</option>
+          <option value="amount_asc">Amount low → high</option>
+        </select>
+      </div>
+
       <div className="grid grid-cols-1 gap-4">
         {loading ? (
           <div className="text-center text-gray-500 py-8">Loading expenses...</div>
-        ) : expenseEntries.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <div className="text-center text-gray-500 py-8">No expenses recorded yet.</div>
         ) : (
-          expenseEntries.map((expense) => (
+          filtered.map((expense) => (
             <div
               key={expense.id}
               onClick={() => handleViewDetail(expense)}

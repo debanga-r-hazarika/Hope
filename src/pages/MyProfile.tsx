@@ -12,6 +12,7 @@ interface ProfileData {
   department?: string | null;
   employee_code?: string | null;
   avatar_url?: string | null;
+  date_of_birth?: string | null;
 }
 
 export function MyProfile() {
@@ -33,7 +34,7 @@ export function MyProfile() {
       setError(null);
       const { data, error } = await supabase
         .from('users')
-        .select('id, full_name, email, role, is_active, department, employee_code, avatar_url')
+        .select('id, full_name, email, role, is_active, department, employee_code, avatar_url, date_of_birth')
         .eq('auth_user_id', authUser.id)
         .single();
       if (error) {
@@ -269,6 +270,20 @@ export function MyProfile() {
                   type="text"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
                   value={profile.is_active ? 'Active' : 'Inactive'}
+                  disabled
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Date of Birth
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700"
+                  value={profile.date_of_birth || ''}
                   disabled
                 />
               </div>

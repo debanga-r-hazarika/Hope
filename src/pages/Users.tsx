@@ -154,12 +154,16 @@ export function Users({ onViewUser }: UsersProps) {
   const filteredUsers = useMemo(() => {
     if (!search.trim()) return users;
     const term = search.toLowerCase();
-    return users.filter((u) =>
-      u.full_name?.toLowerCase().includes(term) ||
-      u.email?.toLowerCase().includes(term) ||
-      (u.employee_code ?? '').toLowerCase().includes(term) ||
-      (u.department ?? '').toLowerCase().includes(term)
-    );
+    return users.filter((u) => {
+      const dob = (u as { date_of_birth?: string }).date_of_birth ?? '';
+      return (
+        u.full_name?.toLowerCase().includes(term) ||
+        u.email?.toLowerCase().includes(term) ||
+        (u.employee_code ?? '').toLowerCase().includes(term) ||
+        (u.department ?? '').toLowerCase().includes(term) ||
+        dob.toLowerCase().includes(term)
+      );
+    });
   }, [users, search]);
 
   const handleCreateUser = async (userData: UserFormData) => {
@@ -202,6 +206,8 @@ export function Users({ onViewUser }: UsersProps) {
       partner_code: null,
       aadhar_number: null,
       pan_number: null,
+      date_of_birth: userData.dateOfBirth || null,
+      address: userData.address || null,
     });
     if (profileError) {
       throw new Error(profileError.message);

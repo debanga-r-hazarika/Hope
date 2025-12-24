@@ -1,3 +1,18 @@
+const evidenceBucket = 'evidence';
+
+export async function uploadEvidence(file: File, category: 'contributions' | 'income' | 'expenses') {
+  const ext = file.name.split('.').pop() || 'dat';
+  const path = `${category}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+  const { data, error } = await supabase.storage.from(evidenceBucket).upload(path, file, {
+    upsert: true,
+    contentType: file.type,
+  });
+  if (error) {
+    throw new Error(`Failed to upload evidence: ${error.message}`);
+  }
+  const { data: publicData } = supabase.storage.from(evidenceBucket).getPublicUrl(data.path);
+  return publicData.publicUrl;
+}
 import { supabase } from './supabase';
 import type {
   ContributionEntry,
@@ -23,6 +38,7 @@ type BaseFinanceRow = {
   created_at: string;
   updated_at: string;
   recorded_by?: string | null;
+  evidence_url?: string | null;
 };
 
 type ContributionRow = BaseFinanceRow & {
@@ -82,6 +98,7 @@ const mapBaseRow = (row: BaseFinanceRow) => ({
   paymentDate: row.payment_date,
   paymentMethod: row.payment_method,
   bankReference: (row as { bank_reference?: string | null }).bank_reference ?? null,
+  evidenceUrl: row.evidence_url ?? null,
   description: row.description ?? null,
   category: row.category ?? null,
   createdAt: row.created_at,
@@ -116,6 +133,7 @@ const toContributionPayload = (data: Partial<ContributionEntry>) => ({
   payment_date: data.paymentDate,
   payment_method: data.paymentMethod,
   bank_reference: data.bankReference ?? null,
+  evidence_url: data.evidenceUrl ?? null,
   description: data.description ?? null,
   category: data.category ?? null,
   recorded_by: data.recordedBy ?? null,
@@ -132,6 +150,7 @@ const toIncomePayload = (data: Partial<IncomeEntry>) => ({
   payment_date: data.paymentDate,
   payment_method: data.paymentMethod,
   bank_reference: data.bankReference ?? null,
+  evidence_url: data.evidenceUrl ?? null,
   description: data.description ?? null,
   category: data.category ?? null,
   recorded_by: data.recordedBy ?? null,
@@ -148,6 +167,7 @@ const toExpensePayload = (data: Partial<ExpenseEntry>) => ({
   payment_date: data.paymentDate,
   payment_method: data.paymentMethod,
   bank_reference: data.bankReference ?? null,
+  evidence_url: data.evidenceUrl ?? null,
   description: data.description ?? null,
   category: data.category ?? null,
   recorded_by: data.recordedBy ?? null,
@@ -189,6 +209,7 @@ export async function createContribution(
       paymentDate: contribution.paymentDate,
       paymentMethod: contribution.paymentMethod,
       bankReference: contribution.bankReference ?? null,
+      evidenceUrl: contribution.evidenceUrl ?? null,
       description: contribution.description ?? `Generated from contribution ${transactionId}`,
       source: 'Contribution',
       incomeType: 'other',

@@ -12,6 +12,8 @@ export interface UserFormData {
   email: string;
   password: string;
   department?: string;
+  dateOfBirth?: string;
+  address?: string;
 }
 
 export function CreateUserModal({ isOpen, onClose, onCreate }: CreateUserModalProps) {
@@ -20,6 +22,8 @@ export function CreateUserModal({ isOpen, onClose, onCreate }: CreateUserModalPr
     email: '',
     password: '',
     department: '',
+    dateOfBirth: '',
+    address: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +39,8 @@ export function CreateUserModal({ isOpen, onClose, onCreate }: CreateUserModalPr
         email: '',
         password: '',
         department: '',
+        dateOfBirth: '',
+        address: '',
       });
       onClose();
     } catch (err) {
@@ -46,7 +52,7 @@ export function CreateUserModal({ isOpen, onClose, onCreate }: CreateUserModalPr
   };
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     setFormData((prev) => ({
       ...prev,
@@ -136,6 +142,32 @@ export function CreateUserModal({ isOpen, onClose, onCreate }: CreateUserModalPr
                   placeholder="Department"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Date of Birth (optional)
+                </label>
+                <input
+                  type="date"
+                  name="dateOfBirth"
+                  value={formData.dateOfBirth}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Address (optional, admin view only)
+              </label>
+              <textarea
+                name="address"
+                value={formData.address}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                rows={2}
+                placeholder="Confidential address (visible to admins)"
+              />
             </div>
           </div>
 
