@@ -241,7 +241,7 @@ export function Contributions({ onBack, hasWriteAccess, focusTransactionId }: Co
                 <p className="text-gray-900 capitalize">
                   {selectedEntry.paymentTo === 'organization_bank'
                     ? 'Organization Bank'
-                    : `Other Bank Account - ${selectedEntry.paidToUser}`
+                    : `Other Bank Account - ${lookupName(selectedEntry.paidToUser)}`
                   }
                 </p>
               </div>
