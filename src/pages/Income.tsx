@@ -214,28 +214,29 @@ export function Income({ onBack, hasWriteAccess, onViewContribution }: IncomePro
             <div className="flex gap-2">
               <button
                 onClick={() => handleEdit(selectedEntry)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
+                disabled={isContributionIncome}
               >
                 <Edit2 className="w-4 h-4" />
-                Edit
+                {isContributionIncome ? 'Edit disabled (contribution)' : 'Edit'}
               </button>
               <button
-                    onClick={() => void handleDelete(selectedEntry.id)}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                    disabled={saving}
+                onClick={() => void handleDelete(selectedEntry.id)}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-60"
+                disabled={saving || isContributionIncome}
               >
                 <Trash2 className="w-4 h-4" />
-                    {saving ? 'Deleting...' : 'Delete'}
+                {saving ? 'Deleting...' : isContributionIncome ? 'Delete disabled' : 'Delete'}
               </button>
-                  {isContributionIncome && onViewContribution && (
-                    <button
-                      onClick={() => onViewContribution(selectedEntry.transactionId)}
-                      className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      View Contribution
-                    </button>
-                  )}
+              {isContributionIncome && onViewContribution && (
+                <button
+                  onClick={() => onViewContribution(selectedEntry.transactionId)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  View Contribution
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -245,7 +246,7 @@ export function Income({ onBack, hasWriteAccess, onViewContribution }: IncomePro
             <div>
               <h1 className="text-2xl font-bold text-gray-900 mb-2">
                 {isContributionIncome
-                  ? `CONTRIN-${selectedEntry.transactionId}`
+                  ? `CONTRIBUTION-${selectedEntry.transactionId}`
                   : selectedEntry.reason}
               </h1>
               <p className="text-gray-600">
@@ -265,9 +266,9 @@ export function Income({ onBack, hasWriteAccess, onViewContribution }: IncomePro
                 </p>
               )}
               {isContributionIncome && (
-                <p className="text-sm text-blue-600 mt-1">
-                  Generated from a contribution entry. View details in Contributions.
-                </p>
+                <div className="mt-2 bg-blue-50 border border-blue-200 text-blue-800 text-sm px-3 py-2 rounded-lg">
+                  This income is generated from a contribution. View or edit it in Contributions.
+                </div>
               )}
             </div>
             <div className="text-right">
@@ -431,7 +432,7 @@ export function Income({ onBack, hasWriteAccess, onViewContribution }: IncomePro
                   <div className="flex-1">
                     <h3 className="text-lg font-semibold text-gray-900 mb-1">
                       {income.source?.toLowerCase() === 'contribution'
-                        ? `CONTRIN-${income.transactionId}`
+                        ? `CONTRIBUTION-${income.transactionId}`
                         : income.reason}
                     </h3>
                     <p className="text-sm text-gray-600 mb-2">
