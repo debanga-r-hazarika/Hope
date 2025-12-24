@@ -1,4 +1,4 @@
-# MATVONI INSIDER
+# HATVONI INSIDER
 
 ## Table of Contents
 1. [Executive Overview](#executive-overview)
@@ -17,7 +17,7 @@
 
 ## Executive Overview
 
-**MATVONI INSIDER** is an enterprise-grade business management platform designed to streamline organizational operations through integrated modules for financial management, user administration, and business analytics.
+**HATVONI INSIDER** is an enterprise-grade business management platform designed to streamline organizational operations through integrated modules for financial management, user administration, and business analytics.
 
 ### Project Vision
 To provide a unified platform that enables organizations to manage their entire business operations efficiently, with real-time data tracking, comprehensive reporting, and role-based access control.

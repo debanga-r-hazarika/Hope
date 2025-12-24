@@ -13,7 +13,7 @@ export function Sidebar({ activePage, navItems, onNavigate, onLogout }: SidebarP
     <aside className="fixed left-0 top-0 bottom-0 w-64 bg-sidebar flex flex-col z-50">
       <div className="px-6 py-4 border-b border-gray-700">
         <h1 className="text-xl font-bold text-white">
-          MATVONI INSIDER
+          HATVONI INSIDER
         </h1>
       </div>
 

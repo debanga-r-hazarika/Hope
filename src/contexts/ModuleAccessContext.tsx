@@ -103,7 +103,10 @@ export function ModuleAccessProvider({ children }: { children: React.ReactNode }
         return;
       }
 
-      rows = fallbackData;
+      rows = (fallbackData ?? []).map((entry) => ({
+        ...entry,
+        access_level: null,
+      }));
     }
 
     const map = getDefaultModuleAccess();

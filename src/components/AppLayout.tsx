@@ -123,7 +123,12 @@ export function AppLayout() {
             />
           );
         default:
-          return <Finance onNavigateToSection={(section) => handleFinanceNavigate(section)} />;
+          return (
+            <Finance
+              onNavigateToSection={(section) => handleFinanceNavigate(section)}
+              accessLevel={financeAccessLevel}
+            />
+          );
       }
     }
 
@@ -179,7 +184,7 @@ export function AppLayout() {
             )}
           </button>
           <div className="text-lg font-bold text-gray-900">
-            MATVONI INSIDER
+            HATVONI INSIDER
           </div>
           <div className="w-10"></div>
         </div>

@@ -126,7 +126,10 @@ export function Users({ onViewUser }: UsersProps) {
         throw fallbackError;
       }
 
-      rows = fallbackData;
+      rows = (fallbackData ?? []).map((row) => ({
+        ...row,
+        access_level: null,
+      }));
     }
 
     const mapped: ModuleAccess[] = (rows ?? []).map((row) => ({

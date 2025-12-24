@@ -65,7 +65,7 @@ export function Dashboard({ onNavigateToFinance, moduleAccess }: DashboardProps)
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
         <p className="mt-2 text-gray-600">
-          Welcome to MATVONI INSIDER
+          Welcome to HATVONI INSIDER
         </p>
       </div>
 
