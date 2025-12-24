@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, Save } from 'lucide-react';
 import { ContributionEntry, PaymentMethod, PaymentTo } from '../types/finance';
+import { supabase } from '../lib/supabase';
 
 interface ContributionFormProps {
   entry: ContributionEntry | null;
@@ -8,27 +9,31 @@ interface ContributionFormProps {
   onCancel: () => void;
 }
 
-const mockUsers = [
-  'John Smith',
-  'Sarah Johnson',
-  'Michael Brown',
-  'Emily Davis',
-  'David Wilson',
-  'Lisa Anderson',
-];
-
 export function ContributionForm({ entry, onSave, onCancel }: ContributionFormProps) {
+  const [users, setUsers] = useState<Array<{ id: string; full_name: string }>>([]);
   const [formData, setFormData] = useState({
     amount: entry?.amount || 0,
     reason: entry?.reason || '',
-    transactionId: entry?.transactionId || '',
     paymentTo: entry?.paymentTo || 'organization_bank' as PaymentTo,
     paidToUser: entry?.paidToUser || '',
     paymentDate: entry?.paymentDate || new Date().toISOString().split('T')[0],
     paymentMethod: entry?.paymentMethod || 'bank_transfer' as PaymentMethod,
+    bankReference: entry?.bankReference || '',
     contributionType: entry?.contributionType || 'capital' as 'investment' | 'capital' | 'loan' | 'other',
     description: entry?.description || '',
   });
+
+  useEffect(() => {
+    supabase
+      .from('users')
+      .select('id, full_name')
+      .then(({ data }) => {
+        setUsers((data ?? []) as Array<{ id: string; full_name: string }>);
+      })
+      .catch(() => {
+        setUsers([]);
+      });
+  }, []);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -120,16 +125,15 @@ export function ContributionForm({ entry, onSave, onCancel }: ContributionFormPr
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Transaction ID *
+              Payment Reference No.
             </label>
             <input
               type="text"
-              name="transactionId"
-              value={formData.transactionId}
+              name="bankReference"
+              value={formData.bankReference}
               onChange={handleChange}
-              required
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="TXN-2024-XXX"
+              placeholder="Bank transaction reference"
             />
           </div>
 
@@ -195,8 +199,8 @@ export function ContributionForm({ entry, onSave, onCancel }: ContributionFormPr
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">Select user</option>
-                {mockUsers.map(user => (
-                  <option key={user} value={user}>{user}</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>{user.full_name}</option>
                 ))}
               </select>
             </div>

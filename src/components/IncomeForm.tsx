@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, Save } from 'lucide-react';
 import { IncomeEntry, PaymentMethod, PaymentTo } from '../types/finance';
+import { supabase } from '../lib/supabase';
 
 interface IncomeFormProps {
   entry: IncomeEntry | null;
@@ -8,28 +9,40 @@ interface IncomeFormProps {
   onCancel: () => void;
 }
 
-const mockUsers = [
-  'John Smith',
-  'Sarah Johnson',
-  'Michael Brown',
-  'Emily Davis',
-  'David Wilson',
-  'Lisa Anderson',
-];
-
 export function IncomeForm({ entry, onSave, onCancel }: IncomeFormProps) {
+  const [users, setUsers] = useState<Array<{ id: string; full_name: string }>>([]);
+  const [userFetchError, setUserFetchError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     amount: entry?.amount || 0,
     reason: entry?.reason || '',
-    transactionId: entry?.transactionId || '',
     paymentTo: entry?.paymentTo || 'organization_bank' as PaymentTo,
     paidToUser: entry?.paidToUser || '',
     paymentDate: entry?.paymentDate || new Date().toISOString().split('T')[0],
     paymentMethod: entry?.paymentMethod || 'bank_transfer' as PaymentMethod,
+    bankReference: entry?.bankReference || '',
     source: entry?.source || '',
     incomeType: entry?.incomeType || 'sales' as 'sales' | 'service' | 'interest' | 'other',
     description: entry?.description || '',
   });
+
+  useEffect(() => {
+    supabase
+      .from('users')
+      .select('id, full_name')
+      .then(({ data, error }) => {
+        if (error) {
+          setUserFetchError(error.message);
+          setUsers([]);
+        } else {
+          setUsers((data ?? []) as Array<{ id: string; full_name: string }>);
+          setUserFetchError(null);
+        }
+      })
+      .catch((err) => {
+        setUserFetchError(err instanceof Error ? err.message : 'Failed to load users');
+        setUsers([]);
+      });
+  }, []);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -65,6 +78,11 @@ export function IncomeForm({ entry, onSave, onCancel }: IncomeFormProps) {
         <p className="mt-2 text-gray-600">
           Fill in the details below to {entry ? 'update' : 'create'} an income entry
         </p>
+        {userFetchError && (
+          <p className="mt-2 text-sm text-red-600">
+            Could not load users: {userFetchError}
+          </p>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-200 p-6">
@@ -136,16 +154,15 @@ export function IncomeForm({ entry, onSave, onCancel }: IncomeFormProps) {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Transaction ID *
+              Payment Reference No.
             </label>
             <input
               type="text"
-              name="transactionId"
-              value={formData.transactionId}
+              name="bankReference"
+              value={formData.bankReference}
               onChange={handleChange}
-              required
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="INC-2024-XXX"
+              placeholder="Bank transaction reference"
             />
           </div>
 
@@ -211,8 +228,8 @@ export function IncomeForm({ entry, onSave, onCancel }: IncomeFormProps) {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">Select user</option>
-                {mockUsers.map(user => (
-                  <option key={user} value={user}>{user}</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>{user.full_name}</option>
                 ))}
               </select>
             </div>

@@ -7,6 +7,8 @@ import type {
   PaymentTo,
 } from '../types/finance';
 
+type TxPrefix = 'INC' | 'EXP';
+
 type BaseFinanceRow = {
   id: string;
   amount: number | string;
@@ -40,6 +42,36 @@ type ExpenseRow = BaseFinanceRow & {
 const toNumber = (value: number | string | null | undefined) =>
   typeof value === 'number' ? value : parseFloat(value ?? '0');
 
+const parseSequence = (transactionId: string, prefix: TxPrefix) => {
+  const match = transactionId?.match(new RegExp(`^TXN-${prefix}-(\\d+)$`));
+  return match ? Number(match[1]) : 0;
+};
+
+const fetchMaxSequence = async (tables: Array<'contributions' | 'income' | 'expenses'>, prefix: TxPrefix) => {
+  const requests = tables.map(async (table) => {
+    const { data, error } = await supabase
+      .from(table)
+      .select('transaction_id')
+      .ilike('transaction_id', `TXN-${prefix}-%`)
+      .order('transaction_id', { ascending: false })
+      .limit(1);
+    if (error) {
+      return 0;
+    }
+    const row = data?.[0] as { transaction_id?: string } | undefined;
+    return row?.transaction_id ? parseSequence(row.transaction_id, prefix) : 0;
+  });
+
+  const results = await Promise.all(requests);
+  return Math.max(0, ...results);
+};
+
+const generateTransactionId = async (prefix: TxPrefix, tables: Array<'contributions' | 'income' | 'expenses'>) => {
+  const currentMax = await fetchMaxSequence(tables, prefix);
+  const next = currentMax + 1;
+  return `TXN-${prefix}-${String(next).padStart(3, '0')}`;
+};
+
 const mapBaseRow = (row: BaseFinanceRow) => ({
   id: row.id,
   amount: toNumber(row.amount),
@@ -49,6 +81,7 @@ const mapBaseRow = (row: BaseFinanceRow) => ({
   paidToUser: row.paid_to_user ?? null,
   paymentDate: row.payment_date,
   paymentMethod: row.payment_method,
+  bankReference: (row as { bank_reference?: string | null }).bank_reference ?? null,
   description: row.description ?? null,
   category: row.category ?? null,
   createdAt: row.created_at,
@@ -82,8 +115,10 @@ const toContributionPayload = (data: Partial<ContributionEntry>) => ({
   paid_to_user: data.paymentTo === 'other_bank_account' ? data.paidToUser ?? null : null,
   payment_date: data.paymentDate,
   payment_method: data.paymentMethod,
+  bank_reference: data.bankReference ?? null,
   description: data.description ?? null,
   category: data.category ?? null,
+  recorded_by: data.recordedBy ?? null,
 });
 
 const toIncomePayload = (data: Partial<IncomeEntry>) => ({
@@ -96,8 +131,10 @@ const toIncomePayload = (data: Partial<IncomeEntry>) => ({
   paid_to_user: data.paymentTo === 'other_bank_account' ? data.paidToUser ?? null : null,
   payment_date: data.paymentDate,
   payment_method: data.paymentMethod,
+  bank_reference: data.bankReference ?? null,
   description: data.description ?? null,
   category: data.category ?? null,
+  recorded_by: data.recordedBy ?? null,
 });
 
 const toExpensePayload = (data: Partial<ExpenseEntry>) => ({
@@ -110,8 +147,10 @@ const toExpensePayload = (data: Partial<ExpenseEntry>) => ({
   paid_to_user: data.paymentTo === 'other_bank_account' ? data.paidToUser ?? null : null,
   payment_date: data.paymentDate,
   payment_method: data.paymentMethod,
+  bank_reference: data.bankReference ?? null,
   description: data.description ?? null,
   category: data.category ?? null,
+  recorded_by: data.recordedBy ?? null,
 });
 
 export async function fetchContributions() {
@@ -124,21 +163,51 @@ export async function fetchContributions() {
   return (data ?? []).map((row) => mapContributionRow(row as ContributionRow));
 }
 
-export async function createContribution(payload: Partial<ContributionEntry>) {
+export async function createContribution(
+  payload: Partial<ContributionEntry>,
+  options?: { mirrorToIncome?: boolean; currentUserId?: string | null }
+) {
+  const transactionId = payload.transactionId || await generateTransactionId('INC', ['contributions', 'income']);
+
   const { data, error } = await supabase
     .from('contributions')
-    .insert(toContributionPayload(payload))
+    .insert(toContributionPayload({ ...payload, transactionId, recordedBy: options?.currentUserId ?? undefined }))
     .select('*')
     .single();
 
   if (error) throw new Error(error.message);
-  return mapContributionRow(data as ContributionRow);
+  const contribution = mapContributionRow(data as ContributionRow);
+
+  const shouldMirror = options?.mirrorToIncome !== false;
+  if (shouldMirror) {
+    const incomePayload: Partial<IncomeEntry> = {
+      amount: contribution.amount,
+      reason: contribution.reason,
+      transactionId,
+      paymentTo: contribution.paymentTo,
+      paidToUser: contribution.paidToUser ?? undefined,
+      paymentDate: contribution.paymentDate,
+      paymentMethod: contribution.paymentMethod,
+      bankReference: contribution.bankReference ?? null,
+      description: contribution.description ?? `Generated from contribution ${transactionId}`,
+      source: 'Contribution',
+      incomeType: 'other',
+      category: contribution.category ?? null,
+    };
+    await createIncome(incomePayload, { currentUserId: options?.currentUserId ?? null });
+  }
+
+  return contribution;
 }
 
-export async function updateContribution(id: string, payload: Partial<ContributionEntry>) {
+export async function updateContribution(
+  id: string,
+  payload: Partial<ContributionEntry>,
+  options?: { currentUserId?: string | null }
+) {
   const { data, error } = await supabase
     .from('contributions')
-    .update(toContributionPayload(payload))
+    .update(toContributionPayload({ ...payload, recordedBy: options?.currentUserId ?? undefined }))
     .eq('id', id)
     .select('*')
     .single();
@@ -162,10 +231,15 @@ export async function fetchIncome() {
   return (data ?? []).map((row) => mapIncomeRow(row as IncomeRow));
 }
 
-export async function createIncome(payload: Partial<IncomeEntry>) {
+export async function createIncome(
+  payload: Partial<IncomeEntry>,
+  options?: { currentUserId?: string | null }
+) {
+  const transactionId = payload.transactionId || await generateTransactionId('INC', ['income', 'contributions']);
+
   const { data, error } = await supabase
     .from('income')
-    .insert(toIncomePayload(payload))
+    .insert(toIncomePayload({ ...payload, transactionId, recordedBy: options?.currentUserId ?? undefined }))
     .select('*')
     .single();
 
@@ -173,10 +247,14 @@ export async function createIncome(payload: Partial<IncomeEntry>) {
   return mapIncomeRow(data as IncomeRow);
 }
 
-export async function updateIncome(id: string, payload: Partial<IncomeEntry>) {
+export async function updateIncome(
+  id: string,
+  payload: Partial<IncomeEntry>,
+  options?: { currentUserId?: string | null }
+) {
   const { data, error } = await supabase
     .from('income')
-    .update(toIncomePayload(payload))
+    .update(toIncomePayload({ ...payload, recordedBy: options?.currentUserId ?? undefined }))
     .eq('id', id)
     .select('*')
     .single();
@@ -200,10 +278,15 @@ export async function fetchExpenses() {
   return (data ?? []).map((row) => mapExpenseRow(row as ExpenseRow));
 }
 
-export async function createExpense(payload: Partial<ExpenseEntry>) {
+export async function createExpense(
+  payload: Partial<ExpenseEntry>,
+  options?: { currentUserId?: string | null }
+) {
+  const transactionId = payload.transactionId || await generateTransactionId('EXP', ['expenses']);
+
   const { data, error } = await supabase
     .from('expenses')
-    .insert(toExpensePayload(payload))
+    .insert(toExpensePayload({ ...payload, transactionId, recordedBy: options?.currentUserId ?? undefined }))
     .select('*')
     .single();
 
@@ -211,10 +294,14 @@ export async function createExpense(payload: Partial<ExpenseEntry>) {
   return mapExpenseRow(data as ExpenseRow);
 }
 
-export async function updateExpense(id: string, payload: Partial<ExpenseEntry>) {
+export async function updateExpense(
+  id: string,
+  payload: Partial<ExpenseEntry>,
+  options?: { currentUserId?: string | null }
+) {
   const { data, error } = await supabase
     .from('expenses')
-    .update(toExpensePayload(payload))
+    .update(toExpensePayload({ ...payload, recordedBy: options?.currentUserId ?? undefined }))
     .eq('id', id)
     .select('*')
     .single();

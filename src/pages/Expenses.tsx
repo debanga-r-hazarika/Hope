@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Plus, Edit2, Trash2, TrendingDown } from 'lucide-react';
 import { ExpenseEntry } from '../types/finance';
 import { ExpenseForm } from '../components/ExpenseForm';
@@ -8,6 +8,8 @@ import {
   updateExpense,
   deleteExpense,
 } from '../lib/finance';
+import { supabase } from '../lib/supabase';
+import { useModuleAccess } from '../contexts/ModuleAccessContext';
 
 interface ExpensesProps {
   onBack: () => void;
@@ -15,6 +17,7 @@ interface ExpensesProps {
 }
 
 export function Expenses({ onBack, hasWriteAccess }: ExpensesProps) {
+  const { userId: currentUserId } = useModuleAccess();
   const [view, setView] = useState<'list' | 'detail' | 'form'>('list');
   const [selectedEntry, setSelectedEntry] = useState<ExpenseEntry | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -22,6 +25,7 @@ export function Expenses({ onBack, hasWriteAccess }: ExpensesProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [usersLookup, setUsersLookup] = useState<Record<string, string>>({});
 
   const loadExpenses = async () => {
     setLoading(true);
@@ -39,6 +43,16 @@ export function Expenses({ onBack, hasWriteAccess }: ExpensesProps) {
 
   useEffect(() => {
     void loadExpenses();
+    void supabase
+      .from('users')
+      .select('id, full_name')
+      .then(({ data }) => {
+        const map: Record<string, string> = {};
+        (data ?? []).forEach((u) => {
+          map[u.id] = (u as { id: string; full_name: string }).full_name;
+        });
+        setUsersLookup(map);
+      });
   }, []);
 
   const formatCurrency = (amount: number) => {
@@ -104,13 +118,13 @@ export function Expenses({ onBack, hasWriteAccess }: ExpensesProps) {
     setError(null);
     try {
       if (isEditing && selectedEntry) {
-        const updated = await updateExpense(selectedEntry.id, data);
+        const updated = await updateExpense(selectedEntry.id, data, { currentUserId });
         setExpenseEntries((prev) =>
           prev.map((e) => (e.id === updated.id ? updated : e))
         );
         setSelectedEntry(updated);
       } else {
-        const created = await createExpense(data);
+        const created = await createExpense(data, { currentUserId });
         setExpenseEntries((prev) => [created, ...prev]);
       }
       setView('list');
@@ -123,6 +137,10 @@ export function Expenses({ onBack, hasWriteAccess }: ExpensesProps) {
   };
 
   const totalAmount = expenseEntries.reduce((sum, e) => sum + e.amount, 0);
+  const lookupName = useMemo(() => (userId?: string | null) => {
+    if (!userId) return '—';
+    return usersLookup[userId] || userId;
+  }, [usersLookup]);
 
   if (view === 'form') {
     return (
@@ -176,6 +194,9 @@ export function Expenses({ onBack, hasWriteAccess }: ExpensesProps) {
               <p className="text-gray-600">
                 Transaction ID: {selectedEntry.transactionId}
               </p>
+              <p className="text-sm text-gray-500 mt-1">
+                Last modified by: {lookupName(selectedEntry.recordedBy)}
+              </p>
             </div>
             <div className="text-right">
               <p className="text-3xl font-bold text-red-600">
@@ -193,6 +214,13 @@ export function Expenses({ onBack, hasWriteAccess }: ExpensesProps) {
                 <div>
                   <p className="text-sm font-medium text-gray-500 mb-1">Vendor</p>
                   <p className="text-gray-900">{selectedEntry.vendor}</p>
+                </div>
+              )}
+
+              {selectedEntry.bankReference && (
+                <div>
+                  <p className="text-sm font-medium text-gray-500 mb-1">Payment Reference</p>
+                  <p className="text-gray-900">{selectedEntry.bankReference}</p>
                 </div>
               )}
 

@@ -23,6 +23,7 @@ export function AppLayout() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [financeSection, setFinanceSection] = useState<FinanceSection>('dashboard');
+  const [focusContributionTxnId, setFocusContributionTxnId] = useState<string | null>(null);
 
   const handleLogout = async () => {
     await signOut();
@@ -42,6 +43,7 @@ export function AppLayout() {
       setActivePage('dashboard');
       setSelectedUserId(null);
       setFinanceSection('dashboard');
+      setFocusContributionTxnId(null);
       setIsMobileMenuOpen(false);
       return;
     }
@@ -49,11 +51,15 @@ export function AppLayout() {
     setActivePage(page);
     setSelectedUserId(null);
     setFinanceSection('dashboard');
+    setFocusContributionTxnId(null);
     setIsMobileMenuOpen(false);
   };
 
   const handleFinanceNavigate = (section: FinanceSection) => {
     setFinanceSection(section);
+    if (section !== 'contributions') {
+      setFocusContributionTxnId(null);
+    }
   };
 
   const availableNavItems: NavigationItem[] = useMemo(
@@ -106,6 +112,7 @@ export function AppLayout() {
             <Contributions
               onBack={() => handleFinanceNavigate('dashboard')}
               hasWriteAccess={hasWriteAccess}
+              focusTransactionId={focusContributionTxnId}
             />
           );
         case 'income':
@@ -113,6 +120,10 @@ export function AppLayout() {
             <Income
               onBack={() => handleFinanceNavigate('dashboard')}
               hasWriteAccess={hasWriteAccess}
+              onViewContribution={(txnId) => {
+                setFocusContributionTxnId(txnId);
+                handleFinanceNavigate('contributions');
+              }}
             />
           );
         case 'expenses':

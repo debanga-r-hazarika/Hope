@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ArrowLeft, Plus, Edit2, Trash2, TrendingUp } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, Plus, Edit2, Trash2, TrendingUp, ExternalLink } from 'lucide-react';
 import { IncomeEntry } from '../types/finance';
 import { IncomeForm } from '../components/IncomeForm';
 import {
@@ -8,13 +8,17 @@ import {
   updateIncome,
   deleteIncome,
 } from '../lib/finance';
+import { supabase } from '../lib/supabase';
+import { useModuleAccess } from '../contexts/ModuleAccessContext';
 
 interface IncomeProps {
   onBack: () => void;
   hasWriteAccess: boolean;
+  onViewContribution?: (transactionId: string) => void;
 }
 
-export function Income({ onBack, hasWriteAccess }: IncomeProps) {
+export function Income({ onBack, hasWriteAccess, onViewContribution }: IncomeProps) {
+  const { userId: currentUserId } = useModuleAccess();
   const [view, setView] = useState<'list' | 'detail' | 'form'>('list');
   const [selectedEntry, setSelectedEntry] = useState<IncomeEntry | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -22,6 +26,7 @@ export function Income({ onBack, hasWriteAccess }: IncomeProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [usersLookup, setUsersLookup] = useState<Record<string, string>>({});
 
   const loadIncome = async () => {
     setLoading(true);
@@ -39,6 +44,16 @@ export function Income({ onBack, hasWriteAccess }: IncomeProps) {
 
   useEffect(() => {
     void loadIncome();
+    void supabase
+      .from('users')
+      .select('id, full_name')
+      .then(({ data }) => {
+        const map: Record<string, string> = {};
+        (data ?? []).forEach((u) => {
+          map[u.id] = (u as { id: string; full_name: string }).full_name;
+        });
+        setUsersLookup(map);
+      });
   }, []);
 
   const formatCurrency = (amount: number) => {
@@ -104,13 +119,13 @@ export function Income({ onBack, hasWriteAccess }: IncomeProps) {
     setError(null);
     try {
       if (isEditing && selectedEntry) {
-        const updated = await updateIncome(selectedEntry.id, data);
+        const updated = await updateIncome(selectedEntry.id, data, { currentUserId });
         setIncomeEntries((prev) =>
           prev.map((e) => (e.id === updated.id ? updated : e))
         );
         setSelectedEntry(updated);
       } else {
-        const created = await createIncome(data);
+        const created = await createIncome(data, { currentUserId });
         setIncomeEntries((prev) => [created, ...prev]);
       }
       setView('list');
@@ -121,6 +136,15 @@ export function Income({ onBack, hasWriteAccess }: IncomeProps) {
       setSaving(false);
     }
   };
+
+  const isContributionIncome = useMemo(
+    () => selectedEntry?.source?.toLowerCase() === 'contribution',
+    [selectedEntry]
+  );
+  const lookupName = useMemo(() => (userId?: string | null) => {
+    if (!userId) return '—';
+    return usersLookup[userId] || userId;
+  }, [usersLookup]);
 
   const totalAmount = incomeEntries.reduce((sum, e) => sum + e.amount, 0);
 
@@ -163,6 +187,15 @@ export function Income({ onBack, hasWriteAccess }: IncomeProps) {
                 <Trash2 className="w-4 h-4" />
                     {saving ? 'Deleting...' : 'Delete'}
               </button>
+                  {isContributionIncome && onViewContribution && (
+                    <button
+                      onClick={() => onViewContribution(selectedEntry.transactionId)}
+                      className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      View Contribution
+                    </button>
+                  )}
             </div>
           )}
         </div>
@@ -171,11 +204,26 @@ export function Income({ onBack, hasWriteAccess }: IncomeProps) {
           <div className="flex items-start justify-between mb-6">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                {selectedEntry.reason}
+                {isContributionIncome
+                  ? `CONTRIN-${selectedEntry.transactionId}`
+                  : selectedEntry.reason}
               </h1>
               <p className="text-gray-600">
                 Transaction ID: {selectedEntry.transactionId}
               </p>
+              <p className="text-sm text-gray-500 mt-1">
+                Last modified by: {lookupName(selectedEntry.recordedBy)}
+              </p>
+              {selectedEntry.bankReference && (
+                <p className="text-sm text-gray-500 mt-1">
+                  Payment Reference: {selectedEntry.bankReference}
+                </p>
+              )}
+              {isContributionIncome && (
+                <p className="text-sm text-blue-600 mt-1">
+                  Generated from a contribution entry. View details in Contributions.
+                </p>
+              )}
             </div>
             <div className="text-right">
               <p className="text-3xl font-bold text-green-600">
@@ -294,7 +342,9 @@ export function Income({ onBack, hasWriteAccess }: IncomeProps) {
 
                   <div className="flex-1">
                     <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                      {income.reason}
+                      {income.source?.toLowerCase() === 'contribution'
+                        ? `CONTRIN-${income.transactionId}`
+                        : income.reason}
                     </h3>
                     <p className="text-sm text-gray-600 mb-2">
                       {income.source} • {formatDate(income.paymentDate)}

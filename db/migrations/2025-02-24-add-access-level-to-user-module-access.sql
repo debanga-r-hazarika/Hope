@@ -11,3 +11,8 @@ WHERE access_level IS NULL;
 -- Optional: refresh PostgREST schema cache (if you have the pgrst channel enabled)
 -- SELECT pg_notify('pgrst', 'reload schema');
 
+-- Payment reference fields for finance entries
+ALTER TABLE contributions ADD COLUMN IF NOT EXISTS bank_reference text;
+ALTER TABLE income ADD COLUMN IF NOT EXISTS bank_reference text;
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS bank_reference text;
+

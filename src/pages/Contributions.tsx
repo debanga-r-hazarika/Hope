@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Plus, Edit2, Trash2, DollarSign } from 'lucide-react';
 import { ContributionEntry } from '../types/finance';
 import { ContributionForm } from '../components/ContributionForm';
@@ -8,13 +8,17 @@ import {
   updateContribution,
   deleteContribution,
 } from '../lib/finance';
+import { supabase } from '../lib/supabase';
+import { useModuleAccess } from '../contexts/ModuleAccessContext';
 
 interface ContributionsProps {
   onBack: () => void;
   hasWriteAccess: boolean;
+  focusTransactionId?: string | null;
 }
 
-export function Contributions({ onBack, hasWriteAccess }: ContributionsProps) {
+export function Contributions({ onBack, hasWriteAccess, focusTransactionId }: ContributionsProps) {
+  const { userId: currentUserId } = useModuleAccess();
   const [view, setView] = useState<'list' | 'detail' | 'form'>('list');
   const [selectedEntry, setSelectedEntry] = useState<ContributionEntry | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -22,6 +26,7 @@ export function Contributions({ onBack, hasWriteAccess }: ContributionsProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [usersLookup, setUsersLookup] = useState<Record<string, string>>({});
 
   const loadContributions = async () => {
     setLoading(true);
@@ -39,7 +44,26 @@ export function Contributions({ onBack, hasWriteAccess }: ContributionsProps) {
 
   useEffect(() => {
     void loadContributions();
+    void supabase
+      .from('users')
+      .select('id, full_name')
+      .then(({ data }) => {
+        const map: Record<string, string> = {};
+        (data ?? []).forEach((u) => {
+          map[u.id] = (u as { id: string; full_name: string }).full_name;
+        });
+        setUsersLookup(map);
+      });
   }, []);
+
+  useEffect(() => {
+    if (!focusTransactionId || contributions.length === 0) return;
+    const match = contributions.find((c) => c.transactionId === focusTransactionId);
+    if (match) {
+      setSelectedEntry(match);
+      setView('detail');
+    }
+  }, [focusTransactionId, contributions]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -104,13 +128,13 @@ export function Contributions({ onBack, hasWriteAccess }: ContributionsProps) {
     setError(null);
     try {
       if (isEditing && selectedEntry) {
-        const updated = await updateContribution(selectedEntry.id, data);
+        const updated = await updateContribution(selectedEntry.id, data, { currentUserId });
         setContributions((prev) =>
           prev.map((c) => (c.id === updated.id ? updated : c))
         );
         setSelectedEntry(updated);
       } else {
-        const created = await createContribution(data);
+        const created = await createContribution(data, { currentUserId });
         setContributions((prev) => [created, ...prev]);
       }
       setView('list');
@@ -121,6 +145,11 @@ export function Contributions({ onBack, hasWriteAccess }: ContributionsProps) {
       setSaving(false);
     }
   };
+
+  const lookupName = useMemo(() => (userId?: string | null) => {
+    if (!userId) return '—';
+    return usersLookup[userId] || userId;
+  }, [usersLookup]);
 
   const totalAmount = contributions.reduce((sum, c) => sum + c.amount, 0);
 
@@ -176,6 +205,14 @@ export function Contributions({ onBack, hasWriteAccess }: ContributionsProps) {
               <p className="text-gray-600">
                 Transaction ID: {selectedEntry.transactionId}
               </p>
+              <p className="text-sm text-gray-500 mt-1">
+                Last modified by: {lookupName(selectedEntry.recordedBy)}
+              </p>
+              {selectedEntry.bankReference && (
+                <p className="text-sm text-gray-500 mt-1">
+                  Payment Reference: {selectedEntry.bankReference}
+                </p>
+              )}
             </div>
             <div className="text-right">
               <p className="text-3xl font-bold text-green-600">
