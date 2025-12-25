@@ -16,9 +16,10 @@ interface IncomeProps {
   onBack: () => void;
   hasWriteAccess: boolean;
   focusTransactionId?: string | null;
+  onViewContribution?: (txnId: string) => void;
 }
 
-export function Income({ onBack, hasWriteAccess, focusTransactionId }: IncomeProps) {
+export function Income({ onBack, hasWriteAccess, focusTransactionId, onViewContribution: _onViewContribution }: IncomeProps) {
   const { userId: currentUserId } = useModuleAccess();
   const [view, setView] = useState<'list' | 'detail' | 'form'>('list');
   const [selectedEntry, setSelectedEntry] = useState<IncomeEntry | null>(null);
@@ -31,12 +32,14 @@ export function Income({ onBack, hasWriteAccess, focusTransactionId }: IncomePro
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | IncomeEntry['incomeType']>('all');
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'>('date_desc');
+  const [month, setMonth] = useState<number>(new Date().getMonth() + 1);
+  const [year, setYear] = useState<number>(new Date().getFullYear());
 
-  const loadIncome = useCallback(async () => {
+  const loadIncome = useCallback(async (m = month, y = year) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchIncome();
+      const data = await fetchIncome(m, y);
       setIncomeEntries(data);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load income entries';
@@ -47,7 +50,7 @@ export function Income({ onBack, hasWriteAccess, focusTransactionId }: IncomePro
   }, []);
 
   useEffect(() => {
-    void loadIncome();
+    void loadIncome(month, year);
     void supabase
       .from('users')
       .select('id, full_name')
@@ -58,7 +61,7 @@ export function Income({ onBack, hasWriteAccess, focusTransactionId }: IncomePro
         });
         setUsersLookup(map);
       });
-  }, [loadIncome]);
+  }, [loadIncome, month, year]);
 
   useEffect(() => {
     const channel = supabase
@@ -67,7 +70,7 @@ export function Income({ onBack, hasWriteAccess, focusTransactionId }: IncomePro
         'postgres_changes',
         { event: '*', schema: 'public', table: 'income' },
         () => {
-          void loadIncome();
+          void loadIncome(month, year);
         }
       )
       .subscribe();
@@ -75,7 +78,11 @@ export function Income({ onBack, hasWriteAccess, focusTransactionId }: IncomePro
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [loadIncome]);
+  }, [loadIncome, month, year]);
+
+  useEffect(() => {
+    void loadIncome(month, year);
+  }, [month, year, loadIncome]);
 
   useEffect(() => {
     if (!focusTransactionId || incomeEntries.length === 0) return;
@@ -95,10 +102,12 @@ export function Income({ onBack, hasWriteAccess, focusTransactionId }: IncomePro
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-IN', {
+    return new Date(dateString).toLocaleString('en-IN', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     });
   };
 
@@ -370,6 +379,34 @@ export function Income({ onBack, hasWriteAccess, focusTransactionId }: IncomePro
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <select
+          value={month}
+          onChange={(e) => {
+            const val = e.target.value === 'all' ? 'all' : Number(e.target.value);
+            setMonth(val);
+          }}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="all">All Months</option>
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+            <option key={m} value={m}>
+              {new Date(0, m - 1).toLocaleString('en', { month: 'long' })}
+            </option>
+          ))}
+        </select>
+        <select
+          value={year}
+          onChange={(e) => {
+            const val = e.target.value === 'all' ? 'all' : Number(e.target.value);
+            setYear(val);
+          }}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="all">All Years</option>
+          {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -426,7 +463,7 @@ export function Income({ onBack, hasWriteAccess, focusTransactionId }: IncomePro
               {income.reason}
                     </h3>
                     <p className="text-sm text-gray-600 mb-2">
-                      {income.source} • {formatDate(income.paymentDate)}
+                      {income.transactionId} • {income.source} • {formatDate(income.paymentDate)}
                     </p>
                     <div className="flex gap-2">
                       <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded capitalize">

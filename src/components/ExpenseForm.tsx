@@ -11,12 +11,23 @@ interface ExpenseFormProps {
 
 export function ExpenseForm({ entry, onSave, onCancel }: ExpenseFormProps) {
   const [users, setUsers] = useState<Array<{ id: string; full_name: string }>>([]);
+
+  const getInitialDateTime = (value?: string) => {
+    const d = value ? new Date(value) : new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return { date, time };
+  };
+
+  const { date: initialDateOnly, time: initialTime } = getInitialDateTime(entry?.paymentDate);
   const [formData, setFormData] = useState({
     amount: entry?.amount || 0,
     reason: entry?.reason || '',
     paymentTo: entry?.paymentTo || 'organization_bank' as PaymentTo,
     paidToUser: entry?.paidToUser || '',
-    paymentDate: entry?.paymentDate || new Date().toISOString().split('T')[0],
+    paymentDate: initialDateOnly,
+    paymentTime: initialTime,
     paymentMethod: entry?.paymentMethod || 'bank_transfer' as PaymentMethod,
     bankReference: entry?.bankReference || '',
     vendor: entry?.vendor || '',
@@ -56,7 +67,9 @@ export function ExpenseForm({ entry, onSave, onCancel }: ExpenseFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData, evidenceFile);
+    const combinedDate = new Date(`${formData.paymentDate}T${formData.paymentTime || '00:00'}`).toISOString();
+    const { paymentTime, ...rest } = formData as typeof formData & { paymentTime?: string };
+    onSave({ ...rest, paymentDate: combinedDate, paymentDateLocal: formData.paymentDate }, evidenceFile);
   };
 
   return (
@@ -195,6 +208,19 @@ export function ExpenseForm({ entry, onSave, onCancel }: ExpenseFormProps) {
               type="date"
               name="paymentDate"
               value={formData.paymentDate}
+              onChange={handleChange}
+              required
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Payment Time *
+            </label>
+            <input
+              type="time"
+              name="paymentTime"
+              value={formData.paymentTime}
               onChange={handleChange}
               required
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"

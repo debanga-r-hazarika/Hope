@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { TrendingUp, TrendingDown, DollarSign, ArrowRight, RefreshCcw, ShieldCheck } from 'lucide-react';
-import { fetchFinanceSummary, fetchRecentTransactions, type TransactionListItem } from '../lib/finance';
+import { TrendingUp, TrendingDown, DollarSign, ArrowRight, RefreshCcw, ShieldCheck, Search } from 'lucide-react';
+import { fetchFinanceSummary, fetchRecentTransactions, searchTransactions, fetchLedgerTransactions, type TransactionListItem, type LedgerItem } from '../lib/finance';
 import type { AccessLevel } from '../types/access';
 
 interface FinanceProps {
@@ -23,6 +23,21 @@ export function Finance({ onNavigateToSection, accessLevel, onOpenTransaction }:
   });
   const [recent, setRecent] = useState<TransactionListItem[]>([]);
   const [recentError, setRecentError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchResults, setSearchResults] = useState<
+    Array<TransactionListItem & { table: 'income' | 'expenses' | 'contributions' }>
+  >([]);
+  const [searchPage, setSearchPage] = useState(1);
+  const searchPageSize = 10;
+  const [ledger, setLedger] = useState<LedgerItem[]>([]);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+  const [ledgerError, setLedgerError] = useState<string | null>(null);
+  const [ledgerFilter, setLedgerFilter] = useState<'all' | 'income' | 'expense' | 'contribution'>('all');
+  const [showLedger, setShowLedger] = useState(false);
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const ledgerPageSize = 10;
 
   const loadSummary = async () => {
     setLoading(true);
@@ -61,6 +76,53 @@ export function Finance({ onNavigateToSection, accessLevel, onOpenTransaction }:
     void loadSummary();
     void loadRecent();
   }, []);
+
+  useEffect(() => {
+    if (!showLedger) return;
+    const loadLedger = async () => {
+      setLedgerLoading(true);
+      setLedgerError(null);
+      try {
+        const data = await fetchLedgerTransactions(300);
+        setLedger(data);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to load ledger';
+        setLedgerError(message);
+      } finally {
+        setLedgerLoading(false);
+      }
+    };
+    void loadLedger();
+  }, [showLedger]);
+
+  useEffect(() => {
+    setLedgerPage(1);
+  }, [ledgerFilter, showLedger]);
+
+  useEffect(() => {
+    const runSearch = async () => {
+      if (!searchTerm || searchTerm.trim().length < 2) {
+        setSearchResults([]);
+        setSearchError(null);
+        setSearchPage(1);
+        return;
+      }
+      setSearchLoading(true);
+      setSearchError(null);
+      try {
+        const results = await searchTransactions(searchTerm.trim(), 15);
+        setSearchResults(results);
+        setSearchPage(1);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Search failed';
+        setSearchError(message);
+      } finally {
+        setSearchLoading(false);
+      }
+    };
+
+    void runSearch();
+  }, [searchTerm]);
 
   if (accessLevel === 'no-access') {
     return (
@@ -140,6 +202,106 @@ export function Finance({ onNavigateToSection, accessLevel, onOpenTransaction }:
             </span>
           )}
         </div>
+        <div className="mt-4">
+          <div className="relative">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+            <input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search all transactions by TXN ID or reason..."
+              className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          {searchError && (
+            <p className="mt-2 text-sm text-red-600">{searchError}</p>
+          )}
+          {searchTerm && (
+            <div className="mt-3 bg-white border border-gray-200 rounded-lg">
+              {searchLoading ? (
+                <div className="p-4 text-sm text-gray-500">Searching...</div>
+              ) : searchResults.length === 0 ? (
+                <div className="p-4 text-sm text-gray-500">No results</div>
+              ) : (
+                <>
+                  <ul className="divide-y divide-gray-200">
+                    {searchResults
+                      .slice((searchPage - 1) * searchPageSize, searchPage * searchPageSize)
+                      .map((item) => (
+                        <li
+                          key={`${item.table}-${item.id}`}
+                          className="p-4 hover:bg-gray-50 cursor-pointer flex items-center justify-between"
+                          onClick={() => {
+                            const target =
+                              item.table === 'contributions'
+                                ? 'contribution'
+                                : item.table === 'income'
+                                ? 'income'
+                                : 'expense';
+                            onOpenTransaction(target, item.transactionId);
+                          }}
+                        >
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">{item.transactionId}</p>
+                            <p className="text-sm text-gray-600">{item.reason}</p>
+                            <p className="text-xs text-gray-500">
+                              {new Date(item.date).toLocaleString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <span
+                              className={`text-xs px-2 py-1 rounded-full border ${
+                                item.table === 'income'
+                                  ? 'text-green-700 border-green-200 bg-green-50'
+                                  : item.table === 'expenses'
+                                  ? 'text-red-700 border-red-200 bg-red-50'
+                                  : 'text-blue-700 border-blue-200 bg-blue-50'
+                              }`}
+                            >
+                              {item.table === 'contributions' ? 'Contribution' : item.table === 'income' ? 'Income' : 'Expense'}
+                            </span>
+                            <p className="mt-2 font-semibold text-gray-900">
+                              {formatCurrency(item.amount)}
+                            </p>
+                          </div>
+                        </li>
+                      ))}
+                  </ul>
+                  <div className="flex items-center justify-between px-4 py-3 text-sm text-gray-600">
+                    <span>
+                      Page {searchPage} of {Math.max(1, Math.ceil(searchResults.length / searchPageSize))}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setSearchPage((p) => Math.max(1, p - 1))}
+                        disabled={searchPage === 1}
+                        className="px-3 py-1 border rounded disabled:opacity-50"
+                      >
+                        Prev
+                      </button>
+                      <button
+                        onClick={() =>
+                          setSearchPage((p) =>
+                            Math.min(Math.ceil(searchResults.length / searchPageSize), p + 1)
+                          )
+                        }
+                        disabled={searchPage >= Math.ceil(searchResults.length / searchPageSize)}
+                        className="px-3 py-1 border rounded disabled:opacity-50"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg p-8 text-white">
@@ -158,14 +320,142 @@ export function Finance({ onNavigateToSection, accessLevel, onOpenTransaction }:
 
         <div className="mt-6">
           <button
-            onClick={() => onNavigateToSection('income')}
+            onClick={() => setShowLedger(true)}
             className="inline-flex items-center gap-2 px-4 py-2 bg-white text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
           >
-            View All Transactions
+            View Ledger (Income & Expenses)
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       </div>
+
+      {showLedger && (
+        <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Ledger</h2>
+              <p className="text-sm text-gray-600">All income, expenses, and contributions</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <select
+                value={ledgerFilter}
+                onChange={(e) => setLedgerFilter(e.target.value as typeof ledgerFilter)}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+              >
+                <option value="all">All</option>
+                <option value="income">Income</option>
+                <option value="expense">Expenses</option>
+                <option value="contribution">Contributions</option>
+              </select>
+              <button
+                onClick={() => setShowLedger(false)}
+                className="text-sm text-gray-600 hover:text-gray-900"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+
+          {ledgerLoading ? (
+            <div className="py-6 text-center text-gray-500">Loading ledger...</div>
+          ) : ledgerError ? (
+            <div className="py-6 text-center text-red-600 text-sm">{ledgerError}</div>
+          ) : ledger.length === 0 ? (
+            <div className="py-6 text-center text-gray-500">No transactions found.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              {(() => {
+                const filtered = ledger.filter((item) => ledgerFilter === 'all' || item.type === ledgerFilter);
+                const totalPages = Math.max(1, Math.ceil(filtered.length / ledgerPageSize));
+                const currentPage = Math.min(ledgerPage, totalPages);
+                const paged = filtered.slice((currentPage - 1) * ledgerPageSize, currentPage * ledgerPageSize);
+
+                return (
+                  <>
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TXN ID</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reason</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {paged.map((item) => (
+                          <tr
+                            key={`${item.table}-${item.id}`}
+                            className="hover:bg-gray-50 cursor-pointer"
+                            onClick={() => {
+                              const target =
+                                item.type === 'contribution'
+                                  ? 'contribution'
+                                  : item.type === 'income'
+                                  ? 'income'
+                                  : 'expense';
+                              onOpenTransaction(target, item.transactionId);
+                            }}
+                          >
+                            <td className="px-4 py-2 text-sm text-gray-700">
+                              {new Date(item.date).toLocaleString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </td>
+                            <td className="px-4 py-2 text-sm font-semibold text-gray-900">{item.transactionId}</td>
+                            <td className="px-4 py-2 text-sm">
+                              <span
+                                className={`px-2 py-1 rounded-full border text-xs ${
+                                  item.type === 'income'
+                                    ? 'text-green-700 border-green-200 bg-green-50'
+                                    : item.type === 'expense'
+                                    ? 'text-red-700 border-red-200 bg-red-50'
+                                    : 'text-blue-700 border-blue-200 bg-blue-50'
+                                }`}
+                              >
+                                {item.type === 'income' ? 'Income' : item.type === 'expense' ? 'Expense' : 'Contribution'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-700">{item.reason}</td>
+                            <td className="px-4 py-2 text-sm font-semibold text-right text-gray-900">
+                              {formatCurrency(item.amount)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="flex items-center justify-between px-4 py-3 text-sm text-gray-600">
+                      <span>
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setLedgerPage((p) => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                          className="px-3 py-1 border rounded disabled:opacity-50"
+                        >
+                          Prev
+                        </button>
+                        <button
+                          onClick={() => setLedgerPage((p) => Math.min(totalPages, p + 1))}
+                          disabled={currentPage >= totalPages}
+                          className="px-3 py-1 border rounded disabled:opacity-50"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {stats.map((stat) => {

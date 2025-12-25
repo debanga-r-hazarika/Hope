@@ -31,12 +31,14 @@ export function Expenses({ onBack, hasWriteAccess, focusTransactionId }: Expense
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | ExpenseEntry['expenseType']>('all');
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'>('date_desc');
+  const [month, setMonth] = useState<number | 'all'>(new Date().getMonth() + 1);
+  const [year, setYear] = useState<number | 'all'>(new Date().getFullYear());
 
-  const loadExpenses = async () => {
+  const loadExpenses = async (m = month, y = year) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchExpenses();
+      const data = await fetchExpenses(m, y);
       setExpenseEntries(data);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load expenses';
@@ -47,7 +49,7 @@ export function Expenses({ onBack, hasWriteAccess, focusTransactionId }: Expense
   };
 
   useEffect(() => {
-    void loadExpenses();
+    void loadExpenses(month, year);
     void supabase
       .from('users')
       .select('id, full_name')
@@ -58,7 +60,11 @@ export function Expenses({ onBack, hasWriteAccess, focusTransactionId }: Expense
         });
         setUsersLookup(map);
       });
-  }, []);
+  }, [month, year]);
+
+  useEffect(() => {
+    void loadExpenses(month, year);
+  }, [month, year]);
 
   useEffect(() => {
     if (!focusTransactionId || expenseEntries.length === 0) return;
@@ -78,10 +84,12 @@ export function Expenses({ onBack, hasWriteAccess, focusTransactionId }: Expense
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-IN', {
+    return new Date(dateString).toLocaleString('en-IN', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     });
   };
 
@@ -364,6 +372,54 @@ export function Expenses({ onBack, hasWriteAccess, focusTransactionId }: Expense
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <select
+          value={month}
+          onChange={(e) => {
+            const val = e.target.value === 'all' ? 'all' : Number(e.target.value);
+            setMonth(val);
+          }}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="all">All Months</option>
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+            <option key={m} value={m}>
+              {new Date(0, m - 1).toLocaleString('en', { month: 'long' })}
+            </option>
+          ))}
+        </select>
+        <select
+          value={year}
+          onChange={(e) => {
+            const val = e.target.value === 'all' ? 'all' : Number(e.target.value);
+            setYear(val);
+          }}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="all">All Years</option>
+          {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
+        <select
+          value={month}
+          onChange={(e) => setMonth(Number(e.target.value))}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        >
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+            <option key={m} value={m}>
+              {new Date(0, m - 1).toLocaleString('en', { month: 'long' })}
+            </option>
+          ))}
+        </select>
+        <select
+          value={year}
+          onChange={(e) => setYear(Number(e.target.value))}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        >
+          {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}

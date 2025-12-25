@@ -31,12 +31,14 @@ export function Contributions({ onBack, hasWriteAccess, focusTransactionId }: Co
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | ContributionEntry['contributionType']>('all');
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'>('date_desc');
+  const [month, setMonth] = useState<number | 'all'>(new Date().getMonth() + 1);
+  const [year, setYear] = useState<number | 'all'>(new Date().getFullYear());
 
-  const loadContributions = async () => {
+  const loadContributions = async (m = month, y = year) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchContributions();
+      const data = await fetchContributions(m, y);
       setContributions(data);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load contributions';
@@ -47,7 +49,7 @@ export function Contributions({ onBack, hasWriteAccess, focusTransactionId }: Co
   };
 
   useEffect(() => {
-    void loadContributions();
+    void loadContributions(month, year);
     void supabase
       .from('users')
       .select('id, full_name')
@@ -59,6 +61,10 @@ export function Contributions({ onBack, hasWriteAccess, focusTransactionId }: Co
         setUsersLookup(map);
       });
   }, []);
+
+  useEffect(() => {
+    void loadContributions(month, year);
+  }, [month, year]);
 
   useEffect(() => {
     if (!focusTransactionId || contributions.length === 0) return;
@@ -78,10 +84,12 @@ export function Contributions({ onBack, hasWriteAccess, focusTransactionId }: Co
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-IN', {
+    return new Date(dateString).toLocaleString('en-IN', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     });
   };
 
@@ -347,6 +355,34 @@ export function Contributions({ onBack, hasWriteAccess, focusTransactionId }: Co
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <select
+          value={month}
+          onChange={(e) => {
+            const val = e.target.value === 'all' ? 'all' : Number(e.target.value);
+            setMonth(val);
+          }}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="all">All Months</option>
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+            <option key={m} value={m}>
+              {new Date(0, m - 1).toLocaleString('en', { month: 'long' })}
+            </option>
+          ))}
+        </select>
+        <select
+          value={year}
+          onChange={(e) => {
+            const val = e.target.value === 'all' ? 'all' : Number(e.target.value);
+            setYear(val);
+          }}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="all">All Years</option>
+          {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}

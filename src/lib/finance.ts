@@ -22,7 +22,7 @@ import type {
   PaymentTo,
 } from '../types/finance';
 
-type TxPrefix = 'INC' | 'EXP';
+type TxPrefix = 'INC' | 'EXP' | 'CNT';
 
 type BaseFinanceRow = {
   id: string;
@@ -88,23 +88,26 @@ const generateTransactionId = async (prefix: TxPrefix, tables: Array<'contributi
   return `TXN-${prefix}-${String(next).padStart(3, '0')}`;
 };
 
-const mapBaseRow = (row: BaseFinanceRow) => ({
-  id: row.id,
-  amount: toNumber(row.amount),
-  reason: row.reason,
-  transactionId: row.transaction_id,
-  paymentTo: row.payment_to,
-  paidToUser: row.paid_to_user ?? null,
-  paymentDate: row.payment_date,
-  paymentMethod: row.payment_method,
-  bankReference: (row as { bank_reference?: string | null }).bank_reference ?? null,
-  evidenceUrl: row.evidence_url ?? null,
-  description: row.description ?? null,
-  category: row.category ?? null,
-  createdAt: row.created_at,
-  updatedAt: row.updated_at,
-  recordedBy: row.recorded_by ?? null,
-});
+const mapBaseRow = (row: BaseFinanceRow) => {
+  const paymentAt = (row as { payment_at?: string | null }).payment_at ?? null;
+  return {
+    id: row.id,
+    amount: toNumber(row.amount),
+    reason: row.reason,
+    transactionId: row.transaction_id,
+    paymentTo: row.payment_to,
+    paidToUser: row.paid_to_user ?? null,
+    paymentDate: paymentAt ?? row.payment_date,
+    paymentMethod: row.payment_method,
+    bankReference: (row as { bank_reference?: string | null }).bank_reference ?? null,
+    evidenceUrl: row.evidence_url ?? null,
+    description: row.description ?? null,
+    category: row.category ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    recordedBy: row.recorded_by ?? null,
+  };
+};
 
 const mapContributionRow = (row: ContributionRow): ContributionEntry => ({
   ...mapBaseRow(row),
@@ -123,62 +126,90 @@ const mapExpenseRow = (row: ExpenseRow): ExpenseEntry => ({
   expenseType: row.expense_type,
 });
 
-const toContributionPayload = (data: Partial<ContributionEntry>) => ({
-  amount: data.amount,
-  contribution_type: data.contributionType,
-  reason: data.reason,
-  transaction_id: data.transactionId,
-  payment_to: data.paymentTo,
-  paid_to_user: data.paymentTo === 'other_bank_account' ? data.paidToUser ?? null : null,
-  payment_date: data.paymentDate,
-  payment_method: data.paymentMethod,
-  bank_reference: data.bankReference ?? null,
-  evidence_url: data.evidenceUrl ?? null,
-  description: data.description ?? null,
-  category: data.category ?? null,
-  recorded_by: data.recordedBy ?? null,
-});
+const toContributionPayload = (data: Partial<ContributionEntry> & { paymentDateLocal?: string }) => {
+  const paymentAt = data.paymentDate ?? null;
+  const paymentDateOnly =
+    data.paymentDateLocal ??
+    (paymentAt && paymentAt.includes('T') ? paymentAt.split('T')[0] : paymentAt ?? null);
+  return {
+    amount: data.amount,
+    contribution_type: data.contributionType,
+    reason: data.reason,
+    transaction_id: data.transactionId,
+    payment_to: data.paymentTo,
+    paid_to_user: data.paymentTo === 'other_bank_account' ? data.paidToUser ?? null : null,
+    payment_date: paymentDateOnly,
+    payment_at: paymentAt,
+    payment_method: data.paymentMethod,
+    bank_reference: data.bankReference ?? null,
+    evidence_url: data.evidenceUrl ?? null,
+    description: data.description ?? null,
+    category: data.category ?? null,
+    recorded_by: data.recordedBy ?? null,
+  };
+};
 
-const toIncomePayload = (data: Partial<IncomeEntry>) => ({
-  amount: data.amount,
-  source: data.source,
-  income_type: data.incomeType,
-  reason: data.reason,
-  transaction_id: data.transactionId,
-  payment_to: data.paymentTo,
-  paid_to_user: data.paymentTo === 'other_bank_account' ? data.paidToUser ?? null : null,
-  payment_date: data.paymentDate,
-  payment_method: data.paymentMethod,
-  bank_reference: data.bankReference ?? null,
-  evidence_url: data.evidenceUrl ?? null,
-  description: data.description ?? null,
-  category: data.category ?? null,
-  recorded_by: data.recordedBy ?? null,
-});
+const toIncomePayload = (data: Partial<IncomeEntry> & { paymentDateLocal?: string }) => {
+  const paymentAt = data.paymentDate ?? null;
+  const paymentDateOnly =
+    data.paymentDateLocal ??
+    (paymentAt && paymentAt.includes('T') ? paymentAt.split('T')[0] : paymentAt ?? null);
+  return {
+    amount: data.amount,
+    source: data.source,
+    income_type: data.incomeType,
+    reason: data.reason,
+    transaction_id: data.transactionId,
+    payment_to: data.paymentTo,
+    paid_to_user: data.paymentTo === 'other_bank_account' ? data.paidToUser ?? null : null,
+    payment_date: paymentDateOnly,
+    payment_at: paymentAt,
+    payment_method: data.paymentMethod,
+    bank_reference: data.bankReference ?? null,
+    evidence_url: data.evidenceUrl ?? null,
+    description: data.description ?? null,
+    category: data.category ?? null,
+    recorded_by: data.recordedBy ?? null,
+  };
+};
 
-const toExpensePayload = (data: Partial<ExpenseEntry>) => ({
-  amount: data.amount,
-  expense_type: data.expenseType,
-  vendor: data.vendor ?? null,
-  reason: data.reason,
-  transaction_id: data.transactionId,
-  payment_to: data.paymentTo,
-  paid_to_user: data.paymentTo === 'other_bank_account' ? data.paidToUser ?? null : null,
-  payment_date: data.paymentDate,
-  payment_method: data.paymentMethod,
-  bank_reference: data.bankReference ?? null,
-  evidence_url: data.evidenceUrl ?? null,
-  description: data.description ?? null,
-  category: data.category ?? null,
-  recorded_by: data.recordedBy ?? null,
-});
+const toExpensePayload = (data: Partial<ExpenseEntry> & { paymentDateLocal?: string }) => {
+  const paymentAt = data.paymentDate ?? null;
+  const paymentDateOnly =
+    data.paymentDateLocal ??
+    (paymentAt && paymentAt.includes('T') ? paymentAt.split('T')[0] : paymentAt ?? null);
+  return {
+    amount: data.amount,
+    expense_type: data.expenseType,
+    vendor: data.vendor ?? null,
+    reason: data.reason,
+    transaction_id: data.transactionId,
+    payment_to: data.paymentTo,
+    paid_to_user: data.paymentTo === 'other_bank_account' ? data.paidToUser ?? null : null,
+    payment_date: paymentDateOnly,
+    payment_at: paymentAt,
+    payment_method: data.paymentMethod,
+    bank_reference: data.bankReference ?? null,
+    evidence_url: data.evidenceUrl ?? null,
+    description: data.description ?? null,
+    category: data.category ?? null,
+    recorded_by: data.recordedBy ?? null,
+  };
+};
 
-export async function fetchContributions() {
-  const { data, error } = await supabase
+export async function fetchContributions(month?: number | 'all', year?: number | 'all') {
+  let query = supabase
     .from('contributions')
     .select('*')
     .order('payment_date', { ascending: false });
 
+  if (month && year && month !== 'all' && year !== 'all') {
+    const start = new Date(Date.UTC(year, month - 1, 1)).toISOString().slice(0, 10);
+    const end = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+    query = query.gte('payment_date', start).lte('payment_date', end);
+  }
+
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) => mapContributionRow(row as ContributionRow));
 }
@@ -187,7 +218,7 @@ export async function createContribution(
   payload: Partial<ContributionEntry>,
   options?: { currentUserId?: string | null }
 ) {
-  const transactionId = payload.transactionId || await generateTransactionId('INC', ['contributions']);
+  const transactionId = payload.transactionId || await generateTransactionId('CNT', ['contributions']);
 
   const { data, error } = await supabase
     .from('contributions')
@@ -220,12 +251,19 @@ export async function deleteContribution(id: string) {
   if (error) throw new Error(error.message);
 }
 
-export async function fetchIncome() {
-  const { data, error } = await supabase
+export async function fetchIncome(month?: number | 'all', year?: number | 'all') {
+  let query = supabase
     .from('income')
     .select('*')
     .order('payment_date', { ascending: false });
 
+  if (month && year && month !== 'all' && year !== 'all') {
+    const start = new Date(Date.UTC(year, month - 1, 1)).toISOString().slice(0, 10);
+    const end = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+    query = query.gte('payment_date', start).lte('payment_date', end);
+  }
+
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) => mapIncomeRow(row as IncomeRow));
 }
@@ -234,7 +272,7 @@ export async function createIncome(
   payload: Partial<IncomeEntry>,
   options?: { currentUserId?: string | null }
 ) {
-  const transactionId = payload.transactionId || await generateTransactionId('INC', ['income', 'contributions']);
+  const transactionId = payload.transactionId || await generateTransactionId('INC', ['income']);
 
   const { data, error } = await supabase
     .from('income')
@@ -267,12 +305,19 @@ export async function deleteIncome(id: string) {
   if (error) throw new Error(error.message);
 }
 
-export async function fetchExpenses() {
-  const { data, error } = await supabase
+export async function fetchExpenses(month?: number | 'all', year?: number | 'all') {
+  let query = supabase
     .from('expenses')
     .select('*')
     .order('payment_date', { ascending: false });
 
+  if (month && year && month !== 'all' && year !== 'all') {
+    const start = new Date(Date.UTC(year, month - 1, 1)).toISOString().slice(0, 10);
+    const end = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+    query = query.gte('payment_date', start).lte('payment_date', end);
+  }
+
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) => mapExpenseRow(row as ExpenseRow));
 }
@@ -373,6 +418,17 @@ export type TransactionListItem = {
   source?: string | null;
 };
 
+export type LedgerItem = {
+  id: string;
+  transactionId: string;
+  amount: number;
+  date: string;
+  reason: string;
+  type: 'income' | 'expense' | 'contribution';
+  table: 'income' | 'expenses' | 'contributions';
+  source?: string | null;
+};
+
 export async function fetchRecentTransactions(limit = 10): Promise<TransactionListItem[]> {
   const [incomeRes, expenseRes] = await Promise.all([
     supabase
@@ -411,6 +467,134 @@ export async function fetchRecentTransactions(limit = 10): Promise<TransactionLi
   }));
 
   const combined = [...incomeItems, ...expenseItems].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+
+  return combined.slice(0, limit);
+}
+
+export async function searchTransactions(term: string, limit = 15): Promise<Array<TransactionListItem & { table: 'income' | 'expenses' | 'contributions' }>> {
+  const like = `%${term}%`;
+
+  const [incomeRes, expenseRes, contribRes] = await Promise.all([
+    supabase
+      .from('income')
+      .select('id, transaction_id, amount, payment_date, reason, source')
+      .or(`transaction_id.ilike.${like},reason.ilike.${like},source.ilike.${like}`)
+      .limit(limit),
+    supabase
+      .from('expenses')
+      .select('id, transaction_id, amount, payment_date, reason')
+      .or(`transaction_id.ilike.${like},reason.ilike.${like}`)
+      .limit(limit),
+    supabase
+      .from('contributions')
+      .select('id, transaction_id, amount, payment_date, reason')
+      .or(`transaction_id.ilike.${like},reason.ilike.${like}`)
+      .limit(limit),
+  ]);
+
+  if (incomeRes.error) throw new Error(incomeRes.error.message);
+  if (expenseRes.error) throw new Error(expenseRes.error.message);
+  if (contribRes.error) throw new Error(contribRes.error.message);
+
+  const incomeItems = (incomeRes.data ?? []).map((row) => ({
+    id: (row as { id: string }).id,
+    transactionId: (row as { transaction_id: string }).transaction_id,
+    amount: toNumber((row as { amount: number | string }).amount),
+    date: (row as { payment_date: string }).payment_date,
+    reason: (row as { reason: string }).reason,
+    type: 'income' as const,
+    source: (row as { source?: string | null }).source ?? null,
+    table: 'income' as const,
+  }));
+
+  const expenseItems = (expenseRes.data ?? []).map((row) => ({
+    id: (row as { id: string }).id,
+    transactionId: (row as { transaction_id: string }).transaction_id,
+    amount: toNumber((row as { amount: number | string }).amount),
+    date: (row as { payment_date: string }).payment_date,
+    reason: (row as { reason: string }).reason,
+    type: 'expense' as const,
+    source: null,
+    table: 'expenses' as const,
+  }));
+
+  const contribItems = (contribRes.data ?? []).map((row) => ({
+    id: (row as { id: string }).id,
+    transactionId: (row as { transaction_id: string }).transaction_id,
+    amount: toNumber((row as { amount: number | string }).amount),
+    date: (row as { payment_date: string }).payment_date,
+    reason: (row as { reason: string }).reason,
+    type: 'income' as const,
+    source: 'contribution' as const,
+    table: 'contributions' as const,
+  }));
+
+  const combined = [...incomeItems, ...expenseItems, ...contribItems].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+
+  return combined.slice(0, limit);
+}
+
+export async function fetchLedgerTransactions(limit = 200): Promise<LedgerItem[]> {
+  const [incomeRes, expenseRes, contribRes] = await Promise.all([
+    supabase
+      .from('income')
+      .select('id, transaction_id, amount, payment_date, reason, source')
+      .order('payment_date', { ascending: false })
+      .limit(limit),
+    supabase
+      .from('expenses')
+      .select('id, transaction_id, amount, payment_date, reason')
+      .order('payment_date', { ascending: false })
+      .limit(limit),
+    supabase
+      .from('contributions')
+      .select('id, transaction_id, amount, payment_date, reason')
+      .order('payment_date', { ascending: false })
+      .limit(limit),
+  ]);
+
+  if (incomeRes.error) throw new Error(incomeRes.error.message);
+  if (expenseRes.error) throw new Error(expenseRes.error.message);
+  if (contribRes.error) throw new Error(contribRes.error.message);
+
+  const incomeItems: LedgerItem[] = (incomeRes.data ?? []).map((row) => ({
+    id: (row as { id: string }).id,
+    transactionId: (row as { transaction_id: string }).transaction_id,
+    amount: toNumber((row as { amount: number | string }).amount),
+    date: (row as { payment_date: string }).payment_date,
+    reason: (row as { reason: string }).reason,
+    type: 'income',
+    table: 'income',
+    source: (row as { source?: string | null }).source ?? null,
+  }));
+
+  const expenseItems: LedgerItem[] = (expenseRes.data ?? []).map((row) => ({
+    id: (row as { id: string }).id,
+    transactionId: (row as { transaction_id: string }).transaction_id,
+    amount: toNumber((row as { amount: number | string }).amount),
+    date: (row as { payment_date: string }).payment_date,
+    reason: (row as { reason: string }).reason,
+    type: 'expense',
+    table: 'expenses',
+    source: null,
+  }));
+
+  const contribItems: LedgerItem[] = (contribRes.data ?? []).map((row) => ({
+    id: (row as { id: string }).id,
+    transactionId: (row as { transaction_id: string }).transaction_id,
+    amount: toNumber((row as { amount: number | string }).amount),
+    date: (row as { payment_date: string }).payment_date,
+    reason: (row as { reason: string }).reason,
+    type: 'contribution',
+    table: 'contributions',
+    source: 'contribution',
+  }));
+
+  const combined = [...incomeItems, ...expenseItems, ...contribItems].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
 
