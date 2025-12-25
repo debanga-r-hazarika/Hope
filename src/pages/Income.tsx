@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Plus, Edit2, Trash2, TrendingUp, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Plus, Edit2, Trash2, TrendingUp } from 'lucide-react';
 import { IncomeEntry } from '../types/finance';
 import { IncomeForm } from '../components/IncomeForm';
 import {
@@ -15,11 +15,10 @@ import { useModuleAccess } from '../contexts/ModuleAccessContext';
 interface IncomeProps {
   onBack: () => void;
   hasWriteAccess: boolean;
-  onViewContribution?: (transactionId: string) => void;
   focusTransactionId?: string | null;
 }
 
-export function Income({ onBack, hasWriteAccess, onViewContribution, focusTransactionId }: IncomeProps) {
+export function Income({ onBack, hasWriteAccess, focusTransactionId }: IncomeProps) {
   const { userId: currentUserId } = useModuleAccess();
   const [view, setView] = useState<'list' | 'detail' | 'form'>('list');
   const [selectedEntry, setSelectedEntry] = useState<IncomeEntry | null>(null);
@@ -32,7 +31,6 @@ export function Income({ onBack, hasWriteAccess, onViewContribution, focusTransa
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | IncomeEntry['incomeType']>('all');
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc'>('date_desc');
-  const [showContribution, setShowContribution] = useState(true);
 
   const loadIncome = useCallback(async () => {
     setLoading(true);
@@ -176,10 +174,6 @@ export function Income({ onBack, hasWriteAccess, onViewContribution, focusTransa
     }
   };
 
-  const isContributionIncome = useMemo(
-    () => selectedEntry?.source?.toLowerCase() === 'contribution',
-    [selectedEntry]
-  );
   const lookupName = useMemo(() => (userId?: string | null) => {
     if (!userId) return '—';
     return usersLookup[userId] || userId;
@@ -198,9 +192,6 @@ export function Income({ onBack, hasWriteAccess, onViewContribution, focusTransa
     if (filterType !== 'all') {
       items = items.filter((i) => i.incomeType === filterType);
     }
-    if (!showContribution) {
-      items = items.filter((i) => (i.source ?? '').toLowerCase() !== 'contribution');
-    }
     items.sort((a, b) => {
       switch (sortBy) {
         case 'amount_desc': return b.amount - a.amount;
@@ -211,7 +202,7 @@ export function Income({ onBack, hasWriteAccess, onViewContribution, focusTransa
       }
     });
     return items;
-  }, [incomeEntries, search, filterType, sortBy, showContribution]);
+  }, [incomeEntries, search, filterType, sortBy]);
 
   const totalAmount = incomeEntries.reduce((sum, e) => sum + e.amount, 0);
 
@@ -237,18 +228,7 @@ export function Income({ onBack, hasWriteAccess, onViewContribution, focusTransa
             Back to List
           </button>
 
-        {hasWriteAccess && isContributionIncome && onViewContribution && (
-            <div className="flex gap-2">
-              <button
-                onClick={() => onViewContribution(selectedEntry.transactionId)}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                <ExternalLink className="w-4 h-4" />
-                View Contribution
-              </button>
-            </div>
-          )}
-        {hasWriteAccess && !isContributionIncome && (
+        {hasWriteAccess && (
           <div className="flex gap-2">
             <button
               onClick={() => handleEdit(selectedEntry)}
@@ -273,9 +253,7 @@ export function Income({ onBack, hasWriteAccess, onViewContribution, focusTransa
           <div className="flex items-start justify-between mb-6">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                {isContributionIncome
-                  ? `CONTRIBUTION-${selectedEntry.transactionId}`
-                  : selectedEntry.reason}
+                {selectedEntry.reason}
               </h1>
               <p className="text-gray-600">
                 Transaction ID: {selectedEntry.transactionId}
@@ -292,11 +270,6 @@ export function Income({ onBack, hasWriteAccess, onViewContribution, focusTransa
                 <p className="text-sm text-blue-600 mt-1">
                   Evidence: <a href={selectedEntry.evidenceUrl} target="_blank" rel="noreferrer" className="underline">View</a>
                 </p>
-              )}
-              {isContributionIncome && (
-                <div className="mt-2 bg-blue-50 border border-blue-200 text-blue-800 text-sm px-3 py-2 rounded-lg">
-                  This income is generated from a contribution. View or edit it in Contributions.
-                </div>
               )}
             </div>
             <div className="text-right">
@@ -424,15 +397,6 @@ export function Income({ onBack, hasWriteAccess, onViewContribution, focusTransa
           <option value="amount_desc">Amount high → low</option>
           <option value="amount_asc">Amount low → high</option>
         </select>
-        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-          <input
-            type="checkbox"
-            checked={showContribution}
-            onChange={(e) => setShowContribution(e.target.checked)}
-            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-          />
-          Show contribution-linked income
-        </label>
       </div>
 
       <div className="grid grid-cols-1 gap-4">
@@ -459,9 +423,7 @@ export function Income({ onBack, hasWriteAccess, onViewContribution, focusTransa
 
                   <div className="flex-1">
                     <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                      {income.source?.toLowerCase() === 'contribution'
-                        ? `CONTRIBUTION-${income.transactionId}`
-                        : income.reason}
+              {income.reason}
                     </h3>
                     <p className="text-sm text-gray-600 mb-2">
                       {income.source} • {formatDate(income.paymentDate)}

@@ -296,7 +296,7 @@ export function Expenses({ onBack, hasWriteAccess, focusTransactionId }: Expense
 
             <div className="space-y-4">
               <div>
-                <p className="text-sm font-medium text-gray-500 mb-1">Payment To</p>
+                <p className="text-sm font-medium text-gray-500 mb-1">Payment From</p>
                 <p className="text-gray-900 capitalize">
                   {selectedEntry.paymentTo === 'organization_bank'
                     ? 'Organization Bank'

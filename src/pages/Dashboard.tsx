@@ -18,7 +18,7 @@ interface Module {
 }
 
 interface DashboardProps {
-  onNavigateToFinance?: () => void;
+  onNavigateToModule?: (moduleId: ModuleId) => void;
   moduleAccess: ModuleAccessMap;
 }
 
@@ -33,7 +33,7 @@ const MODULE_ICON_MAP: Record<
   documents: { icon: FileText, color: 'bg-indigo-50 text-indigo-600' },
 };
 
-export function Dashboard({ onNavigateToFinance, moduleAccess }: DashboardProps) {
+export function Dashboard({ onNavigateToModule, moduleAccess }: DashboardProps) {
   const [showMessage, setShowMessage] = useState(false);
 
   const modules: Module[] = useMemo(
@@ -51,13 +51,14 @@ export function Dashboard({ onNavigateToFinance, moduleAccess }: DashboardProps)
     []
   );
 
-  const handleModuleClick = (moduleId: string) => {
-    if (moduleId === 'finance' && onNavigateToFinance) {
-      onNavigateToFinance();
-    } else {
-      setShowMessage(true);
-      setTimeout(() => setShowMessage(false), 3000);
+  const handleModuleClick = (moduleId: ModuleId) => {
+    if (onNavigateToModule && (moduleId === 'finance' || moduleId === 'documents')) {
+      onNavigateToModule(moduleId);
+      return;
     }
+
+    setShowMessage(true);
+    setTimeout(() => setShowMessage(false), 3000);
   };
 
   return (

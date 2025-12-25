@@ -221,7 +221,11 @@ export async function deleteContribution(id: string) {
 }
 
 export async function fetchIncome() {
-  const { data, error } = await supabase.rpc('income_combined');
+  const { data, error } = await supabase
+    .from('income')
+    .select('*')
+    .order('payment_date', { ascending: false });
+
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) => mapIncomeRow(row as IncomeRow));
 }

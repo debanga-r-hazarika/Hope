@@ -8,11 +8,13 @@ import { Users } from '../pages/Users';
 import { MyProfile } from '../pages/MyProfile';
 import { UserDetail } from '../pages/UserDetail';
 import { Finance } from '../pages/Finance';
+import { Documents } from '../pages/Documents';
 import { Contributions } from '../pages/Contributions';
 import { Income } from '../pages/Income';
 import { Expenses } from '../pages/Expenses';
 import { NAVIGATION_ITEMS, type NavigationItem, type PageType } from '../types/navigation';
 import { useModuleAccess } from '../contexts/ModuleAccessContext';
+import type { ModuleId } from '../types/modules';
 
 type FinanceSection = 'dashboard' | 'contributions' | 'income' | 'expenses';
 
@@ -24,8 +26,6 @@ export function AppLayout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [financeSection, setFinanceSection] = useState<FinanceSection>('dashboard');
   const [focusContributionTxnId, setFocusContributionTxnId] = useState<string | null>(null);
-  const [focusIncomeTxnId, setFocusIncomeTxnId] = useState<string | null>(null);
-  const [focusExpenseTxnId, setFocusExpenseTxnId] = useState<string | null>(null);
 
   const handleLogout = async () => {
     await signOut();
@@ -41,13 +41,15 @@ export function AppLayout() {
   };
 
   const handleNavigate = (page: PageType) => {
-    if (page === 'finance' && getAccessLevel('finance') === 'no-access') {
+    const isBlockedModule =
+      (page === 'finance' && getAccessLevel('finance') === 'no-access') ||
+      (page === 'documents' && getAccessLevel('documents') === 'no-access');
+
+    if (isBlockedModule) {
       setActivePage('dashboard');
       setSelectedUserId(null);
       setFinanceSection('dashboard');
       setFocusContributionTxnId(null);
-      setFocusIncomeTxnId(null);
-      setFocusExpenseTxnId(null);
       setIsMobileMenuOpen(false);
       return;
     }
@@ -56,8 +58,6 @@ export function AppLayout() {
     setSelectedUserId(null);
     setFinanceSection('dashboard');
     setFocusContributionTxnId(null);
-    setFocusIncomeTxnId(null);
-    setFocusExpenseTxnId(null);
     setIsMobileMenuOpen(false);
   };
 
@@ -66,19 +66,13 @@ export function AppLayout() {
     if (section !== 'contributions') {
       setFocusContributionTxnId(null);
     }
-    if (section !== 'income') {
-      setFocusIncomeTxnId(null);
-    }
-    if (section !== 'expenses') {
-      setFocusExpenseTxnId(null);
-    }
   };
 
   const availableNavItems: NavigationItem[] = useMemo(
     () =>
       NAVIGATION_ITEMS.filter((item) => {
-        if (item.id === 'finance') {
-          return getAccessLevel('finance') !== 'no-access';
+        if (item.id === 'finance' || item.id === 'documents') {
+          return getAccessLevel(item.id as ModuleId) !== 'no-access';
         }
         return true;
       }),
@@ -86,8 +80,13 @@ export function AppLayout() {
   );
 
   useEffect(() => {
-    if (!accessLoading && getAccessLevel('finance') === 'no-access' && activePage === 'finance') {
-      setActivePage('dashboard');
+    if (!accessLoading) {
+      if (activePage === 'finance' && getAccessLevel('finance') === 'no-access') {
+        setActivePage('dashboard');
+      }
+      if (activePage === 'documents' && getAccessLevel('documents') === 'no-access') {
+        setActivePage('dashboard');
+      }
     }
   }, [accessLoading, activePage, getAccessLevel]);
 
@@ -121,12 +120,6 @@ export function AppLayout() {
                 if (target === 'contribution') {
                   setFocusContributionTxnId(txnId);
                   handleFinanceNavigate('contributions');
-                } else if (target === 'income') {
-                  setFocusIncomeTxnId(txnId);
-                  handleFinanceNavigate('income');
-                } else {
-                  setFocusExpenseTxnId(txnId);
-                  handleFinanceNavigate('expenses');
                 }
               }}
             />
@@ -144,11 +137,7 @@ export function AppLayout() {
             <Income
               onBack={() => handleFinanceNavigate('dashboard')}
               hasWriteAccess={hasWriteAccess}
-              focusTransactionId={focusIncomeTxnId}
-              onViewContribution={(txnId) => {
-                setFocusContributionTxnId(txnId);
-                handleFinanceNavigate('contributions');
-              }}
+              focusTransactionId={null}
             />
           );
         case 'expenses':
@@ -156,7 +145,7 @@ export function AppLayout() {
             <Expenses
               onBack={() => handleFinanceNavigate('dashboard')}
               hasWriteAccess={hasWriteAccess}
-              focusTransactionId={focusExpenseTxnId}
+              focusTransactionId={null}
             />
           );
         default:
@@ -164,6 +153,7 @@ export function AppLayout() {
             <Finance
               onNavigateToSection={(section) => handleFinanceNavigate(section)}
               accessLevel={financeAccessLevel}
+              onOpenTransaction={() => undefined}
             />
           );
       }
@@ -173,7 +163,13 @@ export function AppLayout() {
       case 'dashboard':
         return (
           <Dashboard
-            onNavigateToFinance={() => handleNavigate('finance')}
+            onNavigateToModule={(moduleId) => {
+              if (moduleId === 'finance') {
+                handleNavigate('finance');
+              } else if (moduleId === 'documents') {
+                handleNavigate('documents');
+              }
+            }}
             moduleAccess={moduleAccess}
           />
         );
@@ -181,10 +177,18 @@ export function AppLayout() {
         return <Users onViewUser={handleViewUser} />;
       case 'profile':
         return <MyProfile />;
+      case 'documents':
+        return <Documents accessLevel={getAccessLevel('documents')} />;
       default:
         return (
           <Dashboard
-            onNavigateToFinance={() => handleNavigate('finance')}
+            onNavigateToModule={(moduleId) => {
+              if (moduleId === 'finance') {
+                handleNavigate('finance');
+              } else if (moduleId === 'documents') {
+                handleNavigate('documents');
+              }
+            }}
             moduleAccess={moduleAccess}
           />
         );

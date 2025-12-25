@@ -222,7 +222,7 @@ export function ExpenseForm({ entry, onSave, onCancel }: ExpenseFormProps) {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Payment To *
+              Payment From *
             </label>
             <select
               name="paymentTo"

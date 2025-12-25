@@ -46,7 +46,7 @@ export function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                placeholder="admin@matvoni.com"
+                placeholder="Enter your official email id"
                 required
               />
             </div>
@@ -83,8 +83,8 @@ export function Login() {
 
           <div className="mt-8 pt-6 border-t border-gray-200">
             <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-600">
-              <p className="font-semibold text-gray-800 mb-2">Sign in with your Supabase user</p>
-              <p>Use credentials created in the Supabase Auth users table.</p>
+              <p className="font-semibold text-gray-800 mb-2">Sign in with your registered email</p>
+              <p>Use the credentials you registered with.</p>
             </div>
           </div>
         </div>
