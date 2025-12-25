@@ -11,6 +11,9 @@ downloads/
 eggs/
 .eggs/
 lib/
+# allow source library directory
+!src/lib/
+!src/lib/**
 lib64/
 parts/
 sdist/
