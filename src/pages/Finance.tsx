@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import { TrendingUp, TrendingDown, DollarSign, ArrowRight, RefreshCcw, ShieldCheck, Search } from 'lucide-react';
-import { fetchFinanceSummary, fetchRecentTransactions, searchTransactions, fetchLedgerTransactions, type TransactionListItem, type LedgerItem } from '../lib/finance';
+import { TrendingUp, TrendingDown, DollarSign, ArrowRight, RefreshCcw, ShieldCheck, Search, Download } from 'lucide-react';
+import { fetchFinanceSummary, fetchRecentTransactions, searchTransactions, fetchLedgerTransactions, fetchContributions, fetchIncome, fetchExpenses, type TransactionListItem, type LedgerItem } from '../lib/finance';
+import { supabase } from '../lib/supabase';
+import * as XLSX from 'xlsx';
 import type { AccessLevel } from '../types/access';
 
 interface FinanceProps {
@@ -38,6 +40,8 @@ export function Finance({ onNavigateToSection, accessLevel, onOpenTransaction }:
   const [showLedger, setShowLedger] = useState(false);
   const [ledgerPage, setLedgerPage] = useState(1);
   const ledgerPageSize = 10;
+  const [exporting, setExporting] = useState(false);
+  const [exportingXlsx, setExportingXlsx] = useState(false);
 
   const loadSummary = async () => {
     setLoading(true);
@@ -58,6 +62,66 @@ export function Finance({ onNavigateToSection, accessLevel, onOpenTransaction }:
       setError(message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExportXlsx = async () => {
+    try {
+      setExportingXlsx(true);
+      const { data: userRows } = await supabase.from('users').select('id, full_name');
+      const userMap: Record<string, string> =
+        (userRows ?? []).reduce((acc, row) => {
+          acc[(row as { id: string }).id] = (row as { full_name?: string | null }).full_name || '';
+          return acc;
+        }, {} as Record<string, string>);
+
+      const [contribs, incomes, expenses] = await Promise.all([
+        fetchContributions('all', 'all'),
+        fetchIncome('all', 'all'),
+        fetchExpenses('all', 'all'),
+      ]);
+
+      const rows = mapRows(userMap, contribs, incomes, expenses);
+
+      const header = [
+        'Type',
+        'Transaction ID',
+        'Amount (INR)',
+        'Amount (raw)',
+        'Payment Date/Time (IST)',
+        'Payment Method',
+        'Party / Source / Vendor',
+        'Reason',
+        'Payment Reference',
+        'Recorded By (Name)',
+        'Recorded By (ID)',
+      ];
+
+      const dataMatrix = [
+        header,
+        ...rows.map((r) => [
+          r.type,
+          r.txn,
+          r.amountPretty,
+          r.amount,
+          r.date,
+          r.method,
+          r.party,
+          r.reason,
+          r.ref,
+          r.evidence,
+          r.recordedBy,
+          r.recordedById,
+        ]),
+      ];
+
+      const ws = XLSX.utils.aoa_to_sheet(dataMatrix);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Finance');
+      const fileName = `finance-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    } finally {
+      setExportingXlsx(false);
     }
   };
 
@@ -98,6 +162,146 @@ export function Finance({ onNavigateToSection, accessLevel, onOpenTransaction }:
   useEffect(() => {
     setLedgerPage(1);
   }, [ledgerFilter, showLedger]);
+
+  const formatDateTimeIST = (iso: string | null | undefined) => {
+    if (!iso) return '';
+    return new Date(iso).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const escapeCsv = (val: string | number | null | undefined) => {
+    const s = val === null || val === undefined ? '' : String(val);
+    if (s.includes('"') || s.includes(',') || s.includes('\n')) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  };
+
+  const amountFmt = (amt: number) =>
+    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(amt);
+
+  const mapRows = (userMap: Record<string, string>, contribs: any[], incomes: any[], expenses: any[]) => {
+    const nameOf = (id?: string | null) => (id && userMap[id]) || id || '';
+    const partyFromPayment = (paymentTo: string | undefined, paidToUser?: string | null) =>
+      paymentTo === 'other_bank_account' ? nameOf(paidToUser) : (paymentTo ?? '');
+
+    const rows = [
+      ...contribs.map((c) => ({
+        type: 'contribution',
+        txn: c.transactionId,
+        amount: c.amount,
+        amountPretty: amountFmt(c.amount),
+        date: formatDateTimeIST(c.paymentDate),
+        method: c.paymentMethod,
+        party: partyFromPayment(c.paymentTo, c.paidToUser),
+        reason: c.reason,
+        ref: c.bankReference ?? '',
+        recordedBy: nameOf(c.recordedBy),
+        recordedById: c.recordedBy ?? '',
+      })),
+      ...incomes.map((i) => ({
+        type: 'income',
+        txn: i.transactionId,
+        amount: i.amount,
+        amountPretty: amountFmt(i.amount),
+        date: formatDateTimeIST(i.paymentDate),
+        method: i.paymentMethod,
+        party: partyFromPayment(i.paymentTo, i.paidToUser) || i.source || '',
+        reason: i.reason,
+        ref: i.bankReference ?? '',
+        recordedBy: nameOf(i.recordedBy),
+        recordedById: i.recordedBy ?? '',
+      })),
+      ...expenses.map((e) => ({
+        type: 'expense',
+        txn: e.transactionId,
+        amount: e.amount,
+        amountPretty: amountFmt(e.amount),
+        date: formatDateTimeIST(e.paymentDate),
+        method: e.paymentMethod,
+        party: partyFromPayment(e.paymentTo, e.paidToUser) || e.vendor || e.paymentTo || '',
+        reason: e.reason,
+        ref: e.bankReference ?? '',
+        recordedBy: nameOf(e.recordedBy),
+        recordedById: e.recordedBy ?? '',
+      })),
+    ];
+    return rows;
+  };
+
+  const handleExportCsv = async () => {
+    try {
+      setExporting(true);
+      // fetch users to map ids to names
+      const { data: userRows } = await supabase.from('users').select('id, full_name');
+      const userMap: Record<string, string> =
+        (userRows ?? []).reduce((acc, row) => {
+          acc[(row as { id: string }).id] = (row as { full_name?: string | null }).full_name || '';
+          return acc;
+        }, {} as Record<string, string>);
+
+      const [contribs, incomes, expenses] = await Promise.all([
+        fetchContributions('all', 'all'),
+        fetchIncome('all', 'all'),
+        fetchExpenses('all', 'all'),
+      ]);
+
+      const rows = mapRows(userMap, contribs, incomes, expenses);
+
+      const header = [
+        'Type',
+        'Transaction ID',
+        'Amount (INR)',
+        'Amount (raw)',
+        'Payment Date/Time (IST)',
+        'Payment Method',
+        'Party / Source / Vendor',
+        'Reason',
+        'Payment Reference',
+        'Recorded By (Name)',
+        'Recorded By (ID)',
+      ];
+
+      const csv = [
+        `HATVONI Finance Export generated at ${formatDateTimeIST(new Date().toISOString())}`,
+        header.map(escapeCsv).join(','),
+        header.map(escapeCsv).join(','),
+        ...rows.map((r) =>
+          [
+            r.type,
+            r.txn,
+            r.amountPretty,
+            r.amount,
+            r.date,
+            r.method,
+            r.party,
+            r.reason,
+            r.ref,
+            r.recordedBy,
+            r.recordedById,
+          ]
+            .map(escapeCsv)
+            .join(',')
+        ),
+      ].join('\n');
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `finance-export-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     const runSearch = async () => {
@@ -195,6 +399,22 @@ export function Finance({ onNavigateToSection, accessLevel, onOpenTransaction }:
           >
             <RefreshCcw className="w-4 h-4" />
             {loading ? 'Refreshing...' : 'Refresh totals'}
+          </button>
+          <button
+            onClick={() => void handleExportCsv()}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors"
+            disabled={exporting}
+          >
+            <Download className="w-4 h-4" />
+            {exporting ? 'Exporting...' : 'Export CSV'}
+          </button>
+          <button
+            onClick={() => void handleExportXlsx()}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+            disabled={exportingXlsx}
+          >
+            <Download className="w-4 h-4" />
+            {exportingXlsx ? 'Exporting...' : 'Export Excel'}
           </button>
           {error && (
             <span className="text-sm text-red-600">
