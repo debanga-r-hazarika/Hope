@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { TrendingUp, TrendingDown, DollarSign, ArrowRight, RefreshCcw, ShieldCheck, Search, Download } from 'lucide-react';
+import { TrendingUp, TrendingDown, IndianRupee, ArrowRight, RefreshCcw, ShieldCheck, Search, Download } from 'lucide-react';
 import { fetchFinanceSummary, fetchRecentTransactions, searchTransactions, fetchLedgerTransactions, fetchContributions, fetchIncome, fetchExpenses, type TransactionListItem, type LedgerItem } from '../lib/finance';
 import { supabase } from '../lib/supabase';
 import * as XLSX from 'xlsx';
@@ -350,7 +350,7 @@ export function Finance({ onNavigateToSection, accessLevel, onOpenTransaction }:
     title: string;
     value: string;
     count: string;
-    icon: typeof DollarSign;
+    icon: typeof IndianRupee;
     color: 'blue' | 'green' | 'red';
     section: 'contributions' | 'income' | 'expenses';
   }> = [
@@ -358,7 +358,7 @@ export function Finance({ onNavigateToSection, accessLevel, onOpenTransaction }:
       title: 'Total Contributions & Investment',
       value: formatCurrency(summary.totalContributions),
       count: `${summary.contributionsCount} entries`,
-      icon: DollarSign,
+      icon: IndianRupee,
       color: 'blue',
       section: 'contributions' as const,
     },
@@ -366,7 +366,7 @@ export function Finance({ onNavigateToSection, accessLevel, onOpenTransaction }:
       title: 'Total Income',
       value: formatCurrency(summary.totalIncome),
       count: `${summary.incomeCount} entries`,
-      icon: TrendingUp,
+      icon: IndianRupee,
       color: 'green',
       section: 'income' as const,
     },
@@ -374,7 +374,7 @@ export function Finance({ onNavigateToSection, accessLevel, onOpenTransaction }:
       title: 'Total Expenses',
       value: formatCurrency(summary.totalExpenses),
       count: `${summary.expensesCount} entries`,
-      icon: TrendingDown,
+      icon: IndianRupee,
       color: 'red',
       section: 'expenses' as const,
     },
@@ -534,7 +534,7 @@ export function Finance({ onNavigateToSection, accessLevel, onOpenTransaction }:
             </p>
           </div>
           <div className="w-20 h-20 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
-            <DollarSign className="w-10 h-10" />
+            <IndianRupee className="w-10 h-10" />
           </div>
         </div>
 
