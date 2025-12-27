@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, RefreshCw, Tag, Users, KanbanSquare, Map, X, CheckCircle } from 'lucide-react';
 import type { AccessLevel } from '../types/access';
 import type { AgileIssue, AgileStatus, AgileRoadmapBucket } from '../types/agile';
@@ -52,6 +52,15 @@ export function Agile({ accessLevel }: AgileProps) {
     description: '',
     deadlineDate: '',
   });
+  const quickAddRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (showQuickAdd && quickAddRef.current) {
+      requestAnimationFrame(() => {
+        quickAddRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+  }, [showQuickAdd]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
   const filtersActive = Boolean(
@@ -289,6 +298,29 @@ export function Agile({ accessLevel }: AgileProps) {
     }
   };
 
+  const handleStatusChange = async (issueId: string, statusId: string) => {
+    if (!canWrite) return;
+    const nextOrdering =
+      Math.max(
+        ...issues
+          .filter((i) => i.statusId === statusId)
+          .map((i) => (typeof i.ordering === 'number' ? i.ordering : 0)),
+        -1
+      ) + 1;
+    const optimistic = issues.map((i) =>
+      i.id === issueId ? { ...i, statusId, ordering: nextOrdering } : i
+    );
+    setIssues(optimistic);
+    try {
+      const updated = await updateAgileIssue(issueId, { statusId, roadmapBucket: null, readyForReview: false, reviewRejected: false });
+      setIssues((prev) => prev.map((i) => (i.id === issueId ? { ...updated, ordering: nextOrdering } : i)));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to move status';
+      setError(message);
+      void loadData();
+    }
+  };
+
   const handleEstimateChange = async (issueId: string, estimate: number | null) => {
     if (!canWrite) return;
     try {
@@ -387,39 +419,53 @@ export function Agile({ accessLevel }: AgileProps) {
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => void loadData()}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Refresh
-          </button>
-          {canWrite && (
+        <div className="flex flex-col gap-2 w-full">
+          <div className="flex w-full gap-2 items-center">
             <button
-              onClick={() => setShowQuickAdd((v) => !v)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                showQuickAdd
-                  ? 'bg-red-600 text-white hover:bg-red-700'
-                  : 'bg-sky-600 text-white hover:bg-sky-700'
-              }`}
+              onClick={() => void loadData()}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
             >
-              {showQuickAdd ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-              {showQuickAdd ? 'Close form' : 'Add Issue'}
+              <RefreshCw className="w-4 h-4" />
+              Refresh
             </button>
-          )}
-          <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden">
-            {(['board', 'backlog', 'roadmap'] as ViewMode[]).map((mode) => (
+            {canWrite && (
               <button
-                key={mode}
-                onClick={() => setView(mode)}
-                className={`px-4 py-2 text-sm font-medium ${
-                  view === mode ? 'bg-sky-600 text-white' : 'text-gray-700 hover:bg-gray-100'
+                onClick={() => {
+                  setShowQuickAdd((v) => {
+                    const next = !v;
+                    if (!v && quickAddRef.current) {
+                      requestAnimationFrame(() => {
+                        quickAddRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      });
+                    }
+                    return next;
+                  });
+                }}
+                className={`ml-auto flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                  showQuickAdd
+                    ? 'bg-red-600 text-white hover:bg-red-700'
+                    : 'bg-sky-600 text-white hover:bg-sky-700'
                 }`}
               >
-                {mode === 'board' ? 'Board' : mode === 'backlog' ? 'Backlog' : 'Roadmap'}
+                {showQuickAdd ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                {showQuickAdd ? 'Close form' : 'Add Task'}
               </button>
-            ))}
+            )}
+          </div>
+          <div className="w-full">
+            <div className="grid grid-cols-3 w-full rounded-lg border border-gray-200 overflow-hidden">
+              {(['board', 'backlog', 'roadmap'] as ViewMode[]).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setView(mode)}
+                  className={`px-4 py-2 text-sm font-medium ${
+                    view === mode ? 'bg-sky-600 text-white' : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  {mode === 'board' ? 'Board' : mode === 'backlog' ? 'Backlog' : 'Roadmap'}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -576,7 +622,10 @@ export function Agile({ accessLevel }: AgileProps) {
       </div>
 
       {canWrite && showQuickAdd && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
+        <div
+          ref={quickAddRef}
+          className="bg-white border border-gray-200 rounded-lg p-4 space-y-3"
+        >
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900">Quick add</h3>
             <span className="text-xs text-gray-500">
@@ -663,7 +712,7 @@ export function Agile({ accessLevel }: AgileProps) {
                   className="inline-flex items-center gap-2 px-4 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors disabled:opacity-60"
                 >
                   <Plus className="w-4 h-4" />
-                  Add Issue
+                  Add Task
                 </button>
               </div>
             </div>
@@ -805,6 +854,18 @@ export function Agile({ accessLevel }: AgileProps) {
                     </div>
                     {canWrite && (
                       <div className="flex flex-wrap items-center gap-2 mt-2">
+                        <select
+                          value={issue.statusId ?? ''}
+                          onChange={(e) => void handleStatusChange(issue.id, e.target.value)}
+                          className="border border-gray-300 rounded px-2 py-1 text-xs focus:ring-2 focus:ring-sky-500 min-w-[120px]"
+                        >
+                          <option value="">Status</option>
+                          {statuses.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </select>
                         <input
                           type="number"
                           value={issue.estimate ?? ''}
