@@ -1,86 +1,105 @@
 import { supabase } from './supabase';
 import type { DocumentRecord } from '../types/documents';
 
+const DOCUMENTS_BUCKET = 'documents';
+
+const mapDocumentRow = (row: Record<string, unknown>): DocumentRecord => ({
+  id: (row.id as string) ?? '',
+  name: (row.name as string) ?? '',
+  fileName: (row.file_name as string) ?? '',
+  fileType: (row.file_type as string | null) ?? null,
+  fileSize: (row.file_size as number | null) ?? null,
+  fileUrl: (row.file_url as string | null) ?? null,
+  filePath: (row.file_path as string) ?? '',
+  uploadedBy: (row.uploaded_by as string | null) ?? null,
+  uploadedAt: (row.uploaded_at as string) ?? '',
+});
+
 export async function fetchDocuments(): Promise<DocumentRecord[]> {
   const { data, error } = await supabase
     .from('documents')
-    .select('*')
+    .select('id, name, file_name, file_type, file_size, file_url, file_path, uploaded_by, uploaded_at')
     .order('uploaded_at', { ascending: false });
 
-  if (error) throw error;
+  if (error) {
+    const isMissingTable =
+      error.code === 'PGRST302' ||
+      error.code === '42P01' ||
+      error.message?.toLowerCase().includes('could not find the table');
 
-  return (data || []).map(row => ({
-    id: row.id,
-    name: row.name,
-    fileName: row.file_name,
-    fileType: row.file_type,
-    fileSize: row.file_size,
-    fileUrl: row.file_url,
-    filePath: row.file_path,
-    uploadedBy: row.uploaded_by,
-    uploadedAt: row.uploaded_at,
-  }));
+    if (isMissingTable) {
+      throw new Error(
+        'Documents table is missing in Supabase. Run the documents migration and refresh the PostgREST schema cache.'
+      );
+    }
+
+    throw new Error(error.message);
+  }
+
+  return (data ?? []).map((row) => mapDocumentRow(row as Record<string, unknown>));
 }
 
 export async function uploadDocument(
   file: File,
-  name: string,
-  userId: string
+  options: { name: string; uploadedBy?: string | null }
 ): Promise<DocumentRecord> {
-  const fileExt = file.name.split('.').pop();
-  const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
-  const filePath = `${userId}/${fileName}`;
+  const ext = file.name.includes('.') ? file.name.split('.').pop() ?? 'dat' : 'dat';
+  const safeName = options.name.trim() || file.name;
+  const path = `${options.uploadedBy ?? 'unknown'}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
 
-  const { error: uploadError } = await supabase.storage
-    .from('documents')
-    .upload(filePath, file);
+  const { error: uploadError } = await supabase.storage.from(DOCUMENTS_BUCKET).upload(path, file, {
+    contentType: file.type || undefined,
+    upsert: false,
+  });
 
-  if (uploadError) throw uploadError;
+  if (uploadError) {
+    throw new Error(`Failed to upload document: ${uploadError.message}`);
+  }
 
-  const { data: urlData } = supabase.storage
-    .from('documents')
-    .getPublicUrl(filePath);
+  const { data: publicData } = supabase.storage.from(DOCUMENTS_BUCKET).getPublicUrl(path);
 
-  const { data, error } = await supabase
+  const { data, error: insertError } = await supabase
     .from('documents')
     .insert({
-      name,
+      name: safeName,
       file_name: file.name,
-      file_type: file.type,
-      file_size: file.size,
-      file_url: urlData.publicUrl,
-      file_path: filePath,
-      uploaded_by: userId,
+      file_type: file.type || null,
+      file_size: file.size ?? null,
+      file_url: publicData?.publicUrl ?? null,
+      file_path: path,
+      uploaded_by: options.uploadedBy ?? null,
     })
-    .select()
+    .select('*')
     .single();
 
-  if (error) throw error;
+  if (insertError) {
+    // Best-effort cleanup if DB insert fails
+    void supabase.storage.from(DOCUMENTS_BUCKET).remove([path]);
+    throw new Error(insertError.message);
+  }
 
-  return {
-    id: data.id,
-    name: data.name,
-    fileName: data.file_name,
-    fileType: data.file_type,
-    fileSize: data.file_size,
-    fileUrl: data.file_url,
-    filePath: data.file_path,
-    uploadedBy: data.uploaded_by,
-    uploadedAt: data.uploaded_at,
-  };
+  return mapDocumentRow(data as Record<string, unknown>);
 }
 
-export async function deleteDocument(id: string, filePath: string): Promise<void> {
-  const { error: storageError } = await supabase.storage
+export async function deleteDocument(id: string): Promise<void> {
+  const { data, error } = await supabase
     .from('documents')
-    .remove([filePath]);
+    .select('file_path')
+    .eq('id', id)
+    .single();
 
-  if (storageError) throw storageError;
+  if (error) {
+    throw new Error(error.message);
+  }
 
-  const { error: dbError } = await supabase
-    .from('documents')
-    .delete()
-    .eq('id', id);
-
-  if (dbError) throw dbError;
+  const filePath = (data as { file_path: string }).file_path;
+  await supabase.from('documents').delete().eq('id', id);
+  if (filePath) {
+    const { error: storageError } = await supabase.storage.from(DOCUMENTS_BUCKET).remove([filePath]);
+    if (storageError) {
+      throw new Error(storageError.message);
+    }
+  }
 }
+
+
