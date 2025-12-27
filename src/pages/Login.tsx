@@ -9,16 +9,17 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [resetEmailSent, setResetEmailSent] = useState('');
+  const [resetMessage, setResetMessage] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    setResetEmailSent('');
+    setResetMessage('');
 
-    const { error: signInError } = await signIn(email, password);
+    const normalizedEmail = email.trim().toLowerCase();
+    const { error: signInError } = await signIn(normalizedEmail, password);
 
     if (signInError) {
       setError(signInError);
@@ -29,21 +30,39 @@ export function Login() {
 
   const handleResetPassword = async () => {
     setError('');
-    setResetEmailSent('');
-    if (!email) {
+    setResetMessage('');
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
       setError('Please enter your email to reset password.');
       return;
     }
     setResetLoading(true);
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin,
-    });
+    const { data: matches, error: lookupError } = await supabase
+      .from('users')
+      .select('id')
+      .ilike('email', normalizedEmail)
+      .limit(1);
+
+    if (lookupError) {
+      setError('Unable to verify that email. Please try again or contact admin.');
+      setResetLoading(false);
+      return;
+    }
+
+    // Note: RLS may hide rows; we still attempt reset even if no visible match.
+
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+      normalizedEmail,
+      {
+        redirectTo: window.location.origin,
+      }
+    );
     if (resetError) {
       setError(resetError.message);
       setResetLoading(false);
       return;
     }
-    setResetEmailSent('Password reset link sent. Check your email.');
+    setResetMessage('If this email is registered, a reset link has been sent. Check your inbox.');
     setResetLoading(false);
   };
 
@@ -56,7 +75,7 @@ export function Login() {
               <LogIn className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h1>
-            <p className="text-gray-600">Sign in to HATVONI INSIDER</p>
+            <p className="text-gray-600">Sign in to MATVONI INSIDER</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
@@ -70,7 +89,7 @@ export function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                placeholder="Enter your official email id"
+                placeholder="Enter your email"
                 required
               />
             </div>
@@ -95,9 +114,9 @@ export function Login() {
                 {error}
               </div>
             )}
-            {resetEmailSent && (
+            {resetMessage && (
               <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-xl text-sm">
-                {resetEmailSent}
+                {resetMessage}
               </div>
             )}
 
@@ -120,9 +139,9 @@ export function Login() {
           </form>
 
           <div className="mt-8 pt-6 border-t border-gray-200">
-            <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-600">
-              <p className="font-semibold text-gray-800 mb-2">Sign in with your registered email</p>
-              <p>Use the credentials you registered with.</p>
+            <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-700">
+              Log in with your registered credentials. If you do not have access,
+              please contact your administrator.
             </div>
           </div>
         </div>

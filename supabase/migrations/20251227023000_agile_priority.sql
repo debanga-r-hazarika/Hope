@@ -7,3 +7,4 @@ alter table public.agile_issues
 update public.agile_issues
   set priority = coalesce(priority, 'normal');
 
+

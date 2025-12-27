@@ -22,3 +22,4 @@ ON CONFLICT (id) DO NOTHING;
 -- Refresh PostgREST schema cache
 SELECT pg_notify('pgrst', 'reload schema');
 
+

@@ -18,3 +18,4 @@ set payment_at = coalesce(payment_at, payment_date);
 update public.expenses
 set payment_at = coalesce(payment_at, payment_date);
 
+

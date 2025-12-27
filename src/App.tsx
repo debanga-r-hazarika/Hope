@@ -2,12 +2,9 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ModuleAccessProvider } from './contexts/ModuleAccessContext';
 import { AppLayout } from './components/AppLayout';
 import { Login } from './pages/Login';
-import { PasswordResetRequired } from './pages/PasswordResetRequired';
 
 function AppContent() {
-  const { user, loading, needsPasswordReset } = useAuth();
-  const mustChangePassword = Boolean(user?.user_metadata?.must_change_password);
-  const requiresReset = mustChangePassword || needsPasswordReset;
+  const { user, loading } = useAuth();
 
   if (loading) {
     return (
@@ -22,10 +19,6 @@ function AppContent() {
 
   if (!user) {
     return <Login />;
-  }
-
-  if (requiresReset) {
-    return <PasswordResetRequired />;
   }
 
   return <AppLayout />;

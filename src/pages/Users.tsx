@@ -55,11 +55,7 @@ export function Users({ onViewUser }: UsersProps) {
 
     // Fallback for schemas without access_level column: we inform the caller if RO was requested.
     const hasReadOnlyRequest = rows.some((r) => r.access_level === 'read-only');
-    const stripped = rows.map((entry) => {
-      const { access_level: removed, ...rest } = entry;
-      void removed;
-      return rest;
-    });
+    const stripped = rows.map(({ access_level: _level, ...rest }) => rest);
     const { error: fallbackError } = await supabase
       .from('user_module_access')
       .upsert(stripped, { onConflict: 'user_id,module_name' });
@@ -183,10 +179,7 @@ export function Users({ onViewUser }: UsersProps) {
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email: userData.email,
       password: userData.password,
-      options: {
-        emailRedirectTo: window.location.origin,
-        data: { must_change_password: true },
-      },
+      options: { emailRedirectTo: window.location.origin },
     });
     if (signUpError) {
       throw new Error(signUpError.message);

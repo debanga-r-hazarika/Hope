@@ -4,3 +4,4 @@ alter table if exists public.agile_issues
 update public.agile_issues
 set ready_for_review = coalesce(ready_for_review, false);
 
+
