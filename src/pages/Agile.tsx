@@ -419,54 +419,53 @@ export function Agile({ accessLevel }: AgileProps) {
             </div>
           </div>
         </div>
-        <div className="flex flex-col gap-2 w-full">
-          <div className="flex w-full gap-2 items-center">
+        <div className="flex gap-2 items-center">
+          <button
+            onClick={() => void loadData()}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </button>
+          {canWrite && (
             <button
-              onClick={() => void loadData()}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              onClick={() => {
+                setShowQuickAdd((v) => {
+                  const next = !v;
+                  if (!v && quickAddRef.current) {
+                    requestAnimationFrame(() => {
+                      quickAddRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    });
+                  }
+                  return next;
+                });
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                showQuickAdd
+                  ? 'bg-red-600 text-white hover:bg-red-700'
+                  : 'bg-sky-600 text-white hover:bg-sky-700'
+              }`}
             >
-              <RefreshCw className="w-4 h-4" />
-              Refresh
+              {showQuickAdd ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              {showQuickAdd ? 'Close form' : 'Add Task'}
             </button>
-            {canWrite && (
-              <button
-                onClick={() => {
-                  setShowQuickAdd((v) => {
-                    const next = !v;
-                    if (!v && quickAddRef.current) {
-                      requestAnimationFrame(() => {
-                        quickAddRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                      });
-                    }
-                    return next;
-                  });
-                }}
-                className={`ml-auto flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                  showQuickAdd
-                    ? 'bg-red-600 text-white hover:bg-red-700'
-                    : 'bg-sky-600 text-white hover:bg-sky-700'
-                }`}
-              >
-                {showQuickAdd ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                {showQuickAdd ? 'Close form' : 'Add Task'}
-              </button>
-            )}
-          </div>
-          <div className="w-full">
-            <div className="grid grid-cols-3 w-full rounded-lg border border-gray-200 overflow-hidden">
-              {(['board', 'backlog', 'roadmap'] as ViewMode[]).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setView(mode)}
-                  className={`px-4 py-2 text-sm font-medium ${
-                    view === mode ? 'bg-sky-600 text-white' : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  {mode === 'board' ? 'Board' : mode === 'backlog' ? 'Backlog' : 'Roadmap'}
-                </button>
-              ))}
-            </div>
-          </div>
+          )}
+        </div>
+      </div>
+
+      <div className="hidden md:block">
+        <div className="grid grid-cols-3 rounded-lg border border-gray-200 overflow-hidden">
+          {(['board', 'backlog', 'roadmap'] as ViewMode[]).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setView(mode)}
+              className={`px-4 py-2 text-sm font-medium ${
+                view === mode ? 'bg-sky-600 text-white' : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {mode === 'board' ? 'Board' : mode === 'backlog' ? 'Backlog' : 'Roadmap'}
+            </button>
+          ))}
         </div>
       </div>
 
