@@ -4,7 +4,8 @@ import {
   Package,
   ShoppingCart,
   TrendingUp,
-  FileText
+  FileText,
+  KanbanSquare
 } from 'lucide-react';
 import type { ModuleAccessMap } from '../types/access';
 import { MODULE_DEFINITIONS, type ModuleId } from '../types/modules';
@@ -31,6 +32,7 @@ const MODULE_ICON_MAP: Record<
   sales: { icon: ShoppingCart, color: 'bg-orange-50 text-orange-600' },
   analytics: { icon: TrendingUp, color: 'bg-pink-50 text-pink-600' },
   documents: { icon: FileText, color: 'bg-indigo-50 text-indigo-600' },
+  agile: { icon: KanbanSquare, color: 'bg-sky-50 text-sky-600' },
 };
 
 export function Dashboard({ onNavigateToModule, moduleAccess }: DashboardProps) {
@@ -52,7 +54,10 @@ export function Dashboard({ onNavigateToModule, moduleAccess }: DashboardProps) 
   );
 
   const handleModuleClick = (moduleId: ModuleId) => {
-    if (onNavigateToModule && (moduleId === 'finance' || moduleId === 'documents')) {
+    if (
+      onNavigateToModule &&
+      (moduleId === 'finance' || moduleId === 'documents' || moduleId === 'agile')
+    ) {
       onNavigateToModule(moduleId);
       return;
     }

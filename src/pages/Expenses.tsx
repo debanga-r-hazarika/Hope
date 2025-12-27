@@ -400,26 +400,6 @@ export function Expenses({ onBack, hasWriteAccess, focusTransactionId }: Expense
             <option key={y} value={y}>{y}</option>
           ))}
         </select>
-        <select
-          value={month}
-          onChange={(e) => setMonth(Number(e.target.value))}
-          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-        >
-          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-            <option key={m} value={m}>
-              {new Date(0, m - 1).toLocaleString('en', { month: 'long' })}
-            </option>
-          ))}
-        </select>
-        <select
-          value={year}
-          onChange={(e) => setYear(Number(e.target.value))}
-          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-        >
-          {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -473,7 +453,7 @@ export function Expenses({ onBack, hasWriteAccess, focusTransactionId }: Expense
                       {expense.reason}
                     </h3>
                     <p className="text-sm text-gray-600 mb-2">
-                      {expense.vendor || 'N/A'} • {formatDate(expense.paymentDate)}
+                      {expense.transactionId} • {expense.vendor || 'N/A'} • {formatDate(expense.paymentDate)}
                     </p>
                     <div className="flex gap-2">
                       <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded capitalize">

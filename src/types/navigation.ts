@@ -1,4 +1,4 @@
-export type PageType = 'dashboard' | 'users' | 'profile' | 'finance' | 'documents';
+export type PageType = 'dashboard' | 'users' | 'profile' | 'finance' | 'documents' | 'agile';
 
 export interface NavigationItem {
   id: PageType;
@@ -10,6 +10,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'finance', label: 'Finance' },
   { id: 'documents', label: 'Documents' },
+  { id: 'agile', label: 'Agile' },
   { id: 'users', label: 'Users' },
   { id: 'profile', label: 'My Profile' },
 ];

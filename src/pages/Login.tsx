@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { LogIn } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 export function Login() {
   const { signIn } = useAuth();
@@ -8,11 +9,14 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [resetEmailSent, setResetEmailSent] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setResetEmailSent('');
 
     const { error: signInError } = await signIn(email, password);
 
@@ -21,6 +25,26 @@ export function Login() {
     }
 
     setLoading(false);
+  };
+
+  const handleResetPassword = async () => {
+    setError('');
+    setResetEmailSent('');
+    if (!email) {
+      setError('Please enter your email to reset password.');
+      return;
+    }
+    setResetLoading(true);
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
+    });
+    if (resetError) {
+      setError(resetError.message);
+      setResetLoading(false);
+      return;
+    }
+    setResetEmailSent('Password reset link sent. Check your email.');
+    setResetLoading(false);
   };
 
   return (
@@ -71,6 +95,11 @@ export function Login() {
                 {error}
               </div>
             )}
+            {resetEmailSent && (
+              <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-xl text-sm">
+                {resetEmailSent}
+              </div>
+            )}
 
             <button
               type="submit"
@@ -78,6 +107,15 @@ export function Login() {
               className="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/20"
             >
               {loading ? 'Signing in...' : 'Sign In'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void handleResetPassword()}
+              disabled={resetLoading}
+              className="w-full text-sm text-blue-700 hover:text-blue-800 underline mt-2 disabled:opacity-60"
+            >
+              {resetLoading ? 'Sending reset link...' : 'Forgot password?'}
             </button>
           </form>
 

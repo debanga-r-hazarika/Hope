@@ -183,7 +183,10 @@ export function Users({ onViewUser }: UsersProps) {
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email: userData.email,
       password: userData.password,
-      options: { emailRedirectTo: window.location.origin },
+      options: {
+        emailRedirectTo: window.location.origin,
+        data: { must_change_password: true },
+      },
     });
     if (signUpError) {
       throw new Error(signUpError.message);

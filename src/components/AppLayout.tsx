@@ -12,6 +12,7 @@ import { Documents } from '../pages/Documents';
 import { Contributions } from '../pages/Contributions';
 import { Income } from '../pages/Income';
 import { Expenses } from '../pages/Expenses';
+import { Agile } from '../pages/Agile';
 import { NAVIGATION_ITEMS, type NavigationItem, type PageType } from '../types/navigation';
 import { useModuleAccess } from '../contexts/ModuleAccessContext';
 import type { ModuleId } from '../types/modules';
@@ -45,7 +46,8 @@ export function AppLayout() {
   const handleNavigate = (page: PageType) => {
     const isBlockedModule =
       (page === 'finance' && getAccessLevel('finance') === 'no-access') ||
-      (page === 'documents' && getAccessLevel('documents') === 'no-access');
+      (page === 'documents' && getAccessLevel('documents') === 'no-access') ||
+      (page === 'agile' && getAccessLevel('agile') === 'no-access');
 
     if (isBlockedModule) {
       setActivePage('dashboard');
@@ -83,7 +85,7 @@ export function AppLayout() {
   const availableNavItems: NavigationItem[] = useMemo(
     () =>
       NAVIGATION_ITEMS.filter((item) => {
-        if (item.id === 'finance' || item.id === 'documents') {
+        if (item.id === 'finance' || item.id === 'documents' || item.id === 'agile') {
           return getAccessLevel(item.id as ModuleId) !== 'no-access';
         }
         return true;
@@ -97,6 +99,9 @@ export function AppLayout() {
         setActivePage('dashboard');
       }
       if (activePage === 'documents' && getAccessLevel('documents') === 'no-access') {
+        setActivePage('dashboard');
+      }
+      if (activePage === 'agile' && getAccessLevel('agile') === 'no-access') {
         setActivePage('dashboard');
       }
     }
@@ -201,6 +206,8 @@ export function AppLayout() {
                 handleNavigate('finance');
               } else if (moduleId === 'documents') {
                 handleNavigate('documents');
+              } else if (moduleId === 'agile') {
+                handleNavigate('agile');
               }
             }}
             moduleAccess={moduleAccess}
@@ -212,6 +219,8 @@ export function AppLayout() {
         return <MyProfile />;
       case 'documents':
         return <Documents accessLevel={getAccessLevel('documents')} />;
+      case 'agile':
+        return <Agile accessLevel={getAccessLevel('agile')} />;
       default:
         return (
           <Dashboard
@@ -220,6 +229,8 @@ export function AppLayout() {
                 handleNavigate('finance');
               } else if (moduleId === 'documents') {
                 handleNavigate('documents');
+              } else if (moduleId === 'agile') {
+                handleNavigate('agile');
               }
             }}
             moduleAccess={moduleAccess}

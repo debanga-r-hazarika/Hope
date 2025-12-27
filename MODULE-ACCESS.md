@@ -18,7 +18,7 @@ This document explains how module access is modeled, enforced, and managed in th
   - Unique constraint on `(user_id, module_name)`
 
 ### Module IDs
-- Defined in `src/types/modules.ts`: `finance`, `inventory`, `sales`, `analytics`, `documents`.
+- Defined in `src/types/modules.ts`: `finance`, `inventory`, `sales`, `analytics`, `documents`, `agile`.
 - The same list drives UI labels and icons.
 
 ### Access Levels
