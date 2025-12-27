@@ -208,6 +208,7 @@ export function Users({ onViewUser }: UsersProps) {
       pan_number: null,
       date_of_birth: userData.dateOfBirth || null,
       address: userData.address || null,
+      requires_password_change: true,
     });
     if (profileError) {
       throw new Error(profileError.message);

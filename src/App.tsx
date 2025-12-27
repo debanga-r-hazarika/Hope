@@ -2,9 +2,10 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ModuleAccessProvider } from './contexts/ModuleAccessContext';
 import { AppLayout } from './components/AppLayout';
 import { Login } from './pages/Login';
+import { ChangePasswordModal } from './components/ChangePasswordModal';
 
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, requiresPasswordChange } = useAuth();
 
   if (loading) {
     return (
@@ -19,6 +20,18 @@ function AppContent() {
 
   if (!user) {
     return <Login />;
+  }
+
+  if (requiresPasswordChange) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <ChangePasswordModal
+          onPasswordChanged={() => {
+            window.location.reload();
+          }}
+        />
+      </div>
+    );
   }
 
   return <AppLayout />;
