@@ -61,16 +61,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const currentUser = session?.user ?? null;
-      setUser(currentUser);
-      if (currentUser) {
-        const needsChange = await checkPasswordChangeRequired(currentUser.id);
-        setRequiresPasswordChange(needsChange);
-      } else {
-        setRequiresPasswordChange(false);
-      }
-      setLoading(false);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      (async () => {
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
+        if (currentUser) {
+          const needsChange = await checkPasswordChangeRequired(currentUser.id);
+          setRequiresPasswordChange(needsChange);
+        } else {
+          setRequiresPasswordChange(false);
+        }
+        setLoading(false);
+      })();
     });
 
     void init();
