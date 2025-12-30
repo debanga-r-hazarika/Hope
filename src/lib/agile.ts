@@ -1,6 +1,28 @@
 import { supabase } from './supabase';
 import type { AgileStatus, AgileIssue, AgileIssueInput, AgileFilters, AgileRoadmapBucket } from '../types/agile';
 
+function mapDbToIssue(row: any): AgileIssue {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    statusId: row.status_id,
+    estimate: row.estimate,
+    ownerId: row.owner_id,
+    ownerName: row.owner_name,
+    tags: row.tags || [],
+    roadmapBucket: row.roadmap_bucket,
+    ordering: row.ordering,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    priority: row.priority,
+    deadlineDate: row.deadline_date,
+    readyForReview: row.ready_for_review,
+    reviewRejected: row.review_rejected,
+  };
+}
+
 export async function fetchStatuses(): Promise<AgileStatus[]> {
   const { data, error } = await supabase
     .from('agile_statuses')
@@ -124,30 +146,62 @@ export async function fetchIssues(filters?: AgileFilters): Promise<AgileIssue[]>
   const { data, error } = await query;
 
   if (error) throw error;
-  return data || [];
+  return (data || []).map(mapDbToIssue);
 }
 
 export async function createIssue(issue: AgileIssueInput): Promise<AgileIssue> {
+  const payload = {
+    title: issue.title,
+    description: issue.description,
+    status_id: issue.statusId,
+    estimate: issue.estimate,
+    owner_id: issue.ownerId,
+    owner_name: issue.ownerName,
+    tags: issue.tags,
+    roadmap_bucket: issue.roadmapBucket,
+    ordering: issue.ordering,
+    created_by: issue.createdBy,
+    priority: issue.priority,
+    deadline_date: issue.deadlineDate,
+    ready_for_review: issue.readyForReview,
+    review_rejected: issue.reviewRejected,
+  };
+
   const { data, error } = await supabase
     .from('agile_issues')
-    .insert([issue])
+    .insert([payload])
     .select()
     .single();
 
   if (error) throw error;
-  return data;
+  return mapDbToIssue(data);
 }
 
 export async function updateIssue(id: string, updates: Partial<AgileIssueInput>): Promise<AgileIssue> {
+  const payload: any = {};
+  if (updates.title !== undefined) payload.title = updates.title;
+  if (updates.description !== undefined) payload.description = updates.description;
+  if (updates.statusId !== undefined) payload.status_id = updates.statusId;
+  if (updates.estimate !== undefined) payload.estimate = updates.estimate;
+  if (updates.ownerId !== undefined) payload.owner_id = updates.ownerId;
+  if (updates.ownerName !== undefined) payload.owner_name = updates.ownerName;
+  if (updates.tags !== undefined) payload.tags = updates.tags;
+  if (updates.roadmapBucket !== undefined) payload.roadmap_bucket = updates.roadmapBucket;
+  if (updates.ordering !== undefined) payload.ordering = updates.ordering;
+  if (updates.priority !== undefined) payload.priority = updates.priority;
+  if (updates.deadlineDate !== undefined) payload.deadline_date = updates.deadlineDate;
+  if (updates.readyForReview !== undefined) payload.ready_for_review = updates.readyForReview;
+  if (updates.reviewRejected !== undefined) payload.review_rejected = updates.reviewRejected;
+
   const { data, error } = await supabase
     .from('agile_issues')
-    .update(updates)
+    .update(payload)
     .eq('id', id)
     .select()
     .single();
 
   if (error) throw error;
-  return data;
+  return mapDbToIssue(data);
 }
 
 export async function deleteIssue(id: string): Promise<void> {

@@ -71,12 +71,15 @@ export function Documents({ accessLevel }: DocumentsProps) {
       setError('Choose a file to upload');
       return;
     }
-    const displayName = name.trim() || file.name;
+    if (!name.trim()) {
+      setError('Document name is required');
+      return;
+    }
 
     setUploading(true);
     setError(null);
     try {
-      const created = await uploadDocument(file, { name: displayName, uploadedBy: userId });
+      const created = await uploadDocument(file, name.trim(), userId || '');
       setDocuments((prev) => [created, ...prev]);
       setFile(null);
       setName('');
@@ -89,12 +92,13 @@ export function Documents({ accessLevel }: DocumentsProps) {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string, filePath: string) => {
     if (!hasWriteAccess) return;
+    if (!confirm('Are you sure you want to delete this document?')) return;
     setDeletingId(id);
     setError(null);
     try {
-      await deleteDocument(id);
+      await deleteDocument(id, filePath);
       setDocuments((prev) => prev.filter((doc) => doc.id !== id));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete document';
@@ -172,13 +176,16 @@ export function Documents({ accessLevel }: DocumentsProps) {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
             <div className="space-y-2 lg:col-span-1">
-              <label className="text-sm font-medium text-gray-700">Document name</label>
+              <label className="text-sm font-medium text-gray-700">
+                Document name <span className="text-red-600">*</span>
+              </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. PAN card, Agreement, Invoice"
                 className="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
               />
             </div>
 
@@ -284,7 +291,7 @@ export function Documents({ accessLevel }: DocumentsProps) {
                   )}
                   {hasWriteAccess && (
                     <button
-                      onClick={() => void handleDelete(doc.id)}
+                      onClick={() => void handleDelete(doc.id, doc.filePath)}
                       disabled={deletingId === doc.id}
                       className="inline-flex items-center gap-2 px-3 py-2 text-sm text-red-700 bg-red-50 rounded-lg hover:bg-red-100 disabled:opacity-60"
                     >
