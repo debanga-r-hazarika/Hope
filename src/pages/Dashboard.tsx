@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
   DollarSign,
-  Package,
-  ShoppingCart,
   TrendingUp,
   FileText,
   KanbanSquare,
@@ -29,8 +27,6 @@ const MODULE_ICON_MAP: Record<
   { icon: React.ElementType; color: string }
 > = {
   finance: { icon: DollarSign, color: 'bg-green-50 text-green-600' },
-  inventory: { icon: Package, color: 'bg-blue-50 text-blue-600' },
-  sales: { icon: ShoppingCart, color: 'bg-orange-50 text-orange-600' },
   analytics: { icon: TrendingUp, color: 'bg-pink-50 text-pink-600' },
   documents: { icon: FileText, color: 'bg-indigo-50 text-indigo-600' },
   agile: { icon: KanbanSquare, color: 'bg-sky-50 text-sky-600' },

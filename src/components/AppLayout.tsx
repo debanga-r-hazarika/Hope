@@ -222,6 +222,8 @@ export function AppLayout() {
                 handleNavigate('documents');
               } else if (moduleId === 'agile') {
                 handleNavigate('agile');
+              } else if (moduleId === 'operations') {
+                handleNavigate('operations');
               }
             }}
             moduleAccess={moduleAccess}
@@ -263,6 +265,8 @@ export function AppLayout() {
                 handleNavigate('documents');
               } else if (moduleId === 'agile') {
                 handleNavigate('agile');
+              } else if (moduleId === 'operations') {
+                handleNavigate('operations');
               }
             }}
             moduleAccess={moduleAccess}
