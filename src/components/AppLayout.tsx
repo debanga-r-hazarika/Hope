@@ -13,12 +13,7 @@ import { Contributions } from '../pages/Contributions';
 import { Income } from '../pages/Income';
 import { Expenses } from '../pages/Expenses';
 import { Agile } from '../pages/Agile';
-import { Suppliers } from '../pages/Suppliers';
-import { RawMaterials } from '../pages/RawMaterials';
-import { RecurringProducts } from '../pages/RecurringProducts';
-import { Production } from '../pages/Production';
-import { ProcessedGoods } from '../pages/ProcessedGoods';
-import { Machines } from '../pages/Machines';
+import { Operations } from '../pages/Operations';
 import { NAVIGATION_ITEMS, type NavigationItem, type PageType } from '../types/navigation';
 import { useModuleAccess } from '../contexts/ModuleAccessContext';
 import type { ModuleId } from '../types/modules';
@@ -91,6 +86,10 @@ export function AppLayout() {
     if (section !== 'expenses') {
       setFocusExpenseTxnId(null);
     }
+  };
+
+  const handleOperationsNavigate = (section: OperationsSection) => {
+    setOperationsSection(section);
   };
 
   const availableNavItems: NavigationItem[] = useMemo(
@@ -238,23 +237,13 @@ export function AppLayout() {
       case 'agile':
         return <Agile accessLevel={getAccessLevel('agile')} />;
       case 'operations':
-        const operationsAccessLevel = getAccessLevel('operations');
-        switch (operationsSection) {
-          case 'suppliers':
-            return <Suppliers accessLevel={operationsAccessLevel} />;
-          case 'raw-materials':
-            return <RawMaterials accessLevel={operationsAccessLevel} />;
-          case 'recurring-products':
-            return <RecurringProducts accessLevel={operationsAccessLevel} />;
-          case 'production':
-            return <Production accessLevel={operationsAccessLevel} />;
-          case 'processed-goods':
-            return <ProcessedGoods accessLevel={operationsAccessLevel} />;
-          case 'machines':
-            return <Machines accessLevel={operationsAccessLevel} />;
-          default:
-            return <Suppliers accessLevel={operationsAccessLevel} />;
-        }
+        return (
+          <Operations
+            section={operationsSection}
+            onNavigateToSection={(section) => setOperationsSection(section)}
+            accessLevel={getAccessLevel('operations')}
+          />
+        );
       default:
         return (
           <Dashboard

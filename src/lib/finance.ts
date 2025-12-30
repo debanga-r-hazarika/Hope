@@ -1,603 +1,340 @@
-const evidenceBucket = 'evidence';
-
-export async function uploadEvidence(file: File, category: 'contributions' | 'income' | 'expenses') {
-  const ext = file.name.split('.').pop() || 'dat';
-  const path = `${category}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
-  const { data, error } = await supabase.storage.from(evidenceBucket).upload(path, file, {
-    upsert: true,
-    contentType: file.type,
-  });
-  if (error) {
-    throw new Error(`Failed to upload evidence: ${error.message}`);
-  }
-  const { data: publicData } = supabase.storage.from(evidenceBucket).getPublicUrl(data.path);
-  return publicData.publicUrl;
-}
 import { supabase } from './supabase';
-import type {
-  ContributionEntry,
-  ExpenseEntry,
-  IncomeEntry,
-  PaymentMethod,
-  PaymentTo,
-} from '../types/finance';
+import type { ContributionEntry, IncomeEntry, ExpenseEntry } from '../types/finance';
 
-type TxPrefix = 'INC' | 'EXP' | 'CNT';
-
-type BaseFinanceRow = {
+export interface TransactionListItem {
   id: string;
-  amount: number | string;
+  transactionId: string;
+  amount: number;
   reason: string;
-  transaction_id: string;
-  payment_to: PaymentTo;
-  paid_to_user?: string | null;
-  payment_date: string;
-  payment_method: PaymentMethod;
-  description?: string | null;
-  category?: string | null;
-  created_at: string;
-  updated_at: string;
-  recorded_by?: string | null;
-  evidence_url?: string | null;
-};
-
-type ContributionRow = BaseFinanceRow & {
-  contribution_type: ContributionEntry['contributionType'];
-};
-
-type IncomeRow = BaseFinanceRow & {
-  source: string;
-  income_type: IncomeEntry['incomeType'];
-};
-
-type ExpenseRow = BaseFinanceRow & {
-  vendor?: string | null;
-  expense_type: ExpenseEntry['expenseType'];
-};
-
-const toNumber = (value: number | string | null | undefined) =>
-  typeof value === 'number' ? value : parseFloat(value ?? '0');
-
-const parseSequence = (transactionId: string, prefix: TxPrefix) => {
-  const match = transactionId?.match(new RegExp(`^TXN-${prefix}-(\\d+)$`));
-  return match ? Number(match[1]) : 0;
-};
-
-const fetchMaxSequence = async (tables: Array<'contributions' | 'income' | 'expenses'>, prefix: TxPrefix) => {
-  const requests = tables.map(async (table) => {
-    const { data, error } = await supabase
-      .from(table)
-      .select('transaction_id')
-      .ilike('transaction_id', `TXN-${prefix}-%`)
-      .order('transaction_id', { ascending: false })
-      .limit(1);
-    if (error) {
-      return 0;
-    }
-    const row = data?.[0] as { transaction_id?: string } | undefined;
-    return row?.transaction_id ? parseSequence(row.transaction_id, prefix) : 0;
-  });
-
-  const results = await Promise.all(requests);
-  return Math.max(0, ...results);
-};
-
-const generateTransactionId = async (prefix: TxPrefix, tables: Array<'contributions' | 'income' | 'expenses'>) => {
-  const currentMax = await fetchMaxSequence(tables, prefix);
-  const next = currentMax + 1;
-  return `TXN-${prefix}-${String(next).padStart(3, '0')}`;
-};
-
-const mapBaseRow = (row: BaseFinanceRow) => {
-  const paymentAt = (row as { payment_at?: string | null }).payment_at ?? null;
-  return {
-    id: row.id,
-    amount: toNumber(row.amount),
-    reason: row.reason,
-    transactionId: row.transaction_id,
-    paymentTo: row.payment_to,
-    paidToUser: row.paid_to_user ?? null,
-    paymentDate: paymentAt ?? row.payment_date,
-    paymentMethod: row.payment_method,
-    bankReference: (row as { bank_reference?: string | null }).bank_reference ?? null,
-    evidenceUrl: row.evidence_url ?? null,
-    description: row.description ?? null,
-    category: row.category ?? null,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    recordedBy: row.recorded_by ?? null,
-  };
-};
-
-const mapContributionRow = (row: ContributionRow): ContributionEntry => ({
-  ...mapBaseRow(row),
-  contributionType: row.contribution_type,
-});
-
-const mapIncomeRow = (row: IncomeRow): IncomeEntry => ({
-  ...mapBaseRow(row),
-  source: row.source,
-  incomeType: row.income_type,
-});
-
-const mapExpenseRow = (row: ExpenseRow): ExpenseEntry => ({
-  ...mapBaseRow(row),
-  vendor: row.vendor ?? undefined,
-  expenseType: row.expense_type,
-});
-
-const toContributionPayload = (data: Partial<ContributionEntry> & { paymentDateLocal?: string }) => {
-  const paymentAt = data.paymentDate ?? null;
-  const paymentDateOnly =
-    data.paymentDateLocal ??
-    (paymentAt && paymentAt.includes('T') ? paymentAt.split('T')[0] : paymentAt ?? null);
-  return {
-    amount: data.amount,
-    contribution_type: data.contributionType,
-    reason: data.reason,
-    transaction_id: data.transactionId,
-    payment_to: data.paymentTo,
-    paid_to_user: data.paymentTo === 'other_bank_account' ? data.paidToUser ?? null : null,
-    payment_date: paymentDateOnly,
-    payment_at: paymentAt,
-    payment_method: data.paymentMethod,
-    bank_reference: data.bankReference ?? null,
-    evidence_url: data.evidenceUrl ?? null,
-    description: data.description ?? null,
-    category: data.category ?? null,
-    recorded_by: data.recordedBy ?? null,
-  };
-};
-
-const toIncomePayload = (data: Partial<IncomeEntry> & { paymentDateLocal?: string }) => {
-  const paymentAt = data.paymentDate ?? null;
-  const paymentDateOnly =
-    data.paymentDateLocal ??
-    (paymentAt && paymentAt.includes('T') ? paymentAt.split('T')[0] : paymentAt ?? null);
-  return {
-    amount: data.amount,
-    source: data.source,
-    income_type: data.incomeType,
-    reason: data.reason,
-    transaction_id: data.transactionId,
-    payment_to: data.paymentTo,
-    paid_to_user: data.paymentTo === 'other_bank_account' ? data.paidToUser ?? null : null,
-    payment_date: paymentDateOnly,
-    payment_at: paymentAt,
-    payment_method: data.paymentMethod,
-    bank_reference: data.bankReference ?? null,
-    evidence_url: data.evidenceUrl ?? null,
-    description: data.description ?? null,
-    category: data.category ?? null,
-    recorded_by: data.recordedBy ?? null,
-  };
-};
-
-const toExpensePayload = (data: Partial<ExpenseEntry> & { paymentDateLocal?: string }) => {
-  const paymentAt = data.paymentDate ?? null;
-  const paymentDateOnly =
-    data.paymentDateLocal ??
-    (paymentAt && paymentAt.includes('T') ? paymentAt.split('T')[0] : paymentAt ?? null);
-  return {
-    amount: data.amount,
-    expense_type: data.expenseType,
-    vendor: data.vendor ?? null,
-    reason: data.reason,
-    transaction_id: data.transactionId,
-    payment_to: data.paymentTo,
-    paid_to_user: data.paymentTo === 'other_bank_account' ? data.paidToUser ?? null : null,
-    payment_date: paymentDateOnly,
-    payment_at: paymentAt,
-    payment_method: data.paymentMethod,
-    bank_reference: data.bankReference ?? null,
-    evidence_url: data.evidenceUrl ?? null,
-    description: data.description ?? null,
-    category: data.category ?? null,
-    recorded_by: data.recordedBy ?? null,
-  };
-};
-
-export async function fetchContributions(month?: number | 'all', year?: number | 'all') {
-  let query = supabase
-    .from('contributions')
-    .select('*')
-    .order('payment_date', { ascending: false });
-
-  if (month && year && month !== 'all' && year !== 'all') {
-    const start = new Date(Date.UTC(year, month - 1, 1)).toISOString().slice(0, 10);
-    const end = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
-    query = query.gte('payment_date', start).lte('payment_date', end);
-  }
-
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => mapContributionRow(row as ContributionRow));
+  date: string;
+  type: 'income' | 'expense' | 'contribution';
+  source?: string;
 }
 
-export async function createContribution(
-  payload: Partial<ContributionEntry>,
-  options?: { currentUserId?: string | null }
-) {
-  const transactionId = payload.transactionId || await generateTransactionId('CNT', ['contributions']);
-
-  const { data, error } = await supabase
-    .from('contributions')
-    .insert(toContributionPayload({ ...payload, transactionId, recordedBy: options?.currentUserId ?? undefined }))
-    .select('*')
-    .single();
-
-  if (error) throw new Error(error.message);
-  return mapContributionRow(data as ContributionRow);
+export interface LedgerItem {
+  id: string;
+  transactionId: string;
+  amount: number;
+  reason: string;
+  date: string;
+  type: 'income' | 'expense' | 'contribution';
+  table: string;
 }
-
-export async function updateContribution(
-  id: string,
-  payload: Partial<ContributionEntry>,
-  options?: { currentUserId?: string | null }
-) {
-  const { data, error } = await supabase
-    .from('contributions')
-    .update(toContributionPayload({ ...payload, recordedBy: options?.currentUserId ?? undefined }))
-    .eq('id', id)
-    .select('*')
-    .single();
-
-  if (error) throw new Error(error.message);
-  return mapContributionRow(data as ContributionRow);
-}
-
-export async function deleteContribution(id: string) {
-  const { error } = await supabase.from('contributions').delete().eq('id', id);
-  if (error) throw new Error(error.message);
-}
-
-export async function fetchIncome(month?: number | 'all', year?: number | 'all') {
-  let query = supabase
-    .from('income')
-    .select('*')
-    .order('payment_date', { ascending: false });
-
-  if (month && year && month !== 'all' && year !== 'all') {
-    const start = new Date(Date.UTC(year, month - 1, 1)).toISOString().slice(0, 10);
-    const end = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
-    query = query.gte('payment_date', start).lte('payment_date', end);
-  }
-
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => mapIncomeRow(row as IncomeRow));
-}
-
-export async function createIncome(
-  payload: Partial<IncomeEntry>,
-  options?: { currentUserId?: string | null }
-) {
-  const transactionId = payload.transactionId || await generateTransactionId('INC', ['income']);
-
-  const { data, error } = await supabase
-    .from('income')
-    .insert(toIncomePayload({ ...payload, transactionId, recordedBy: options?.currentUserId ?? undefined }))
-    .select('*')
-    .single();
-
-  if (error) throw new Error(error.message);
-  return mapIncomeRow(data as IncomeRow);
-}
-
-export async function updateIncome(
-  id: string,
-  payload: Partial<IncomeEntry>,
-  options?: { currentUserId?: string | null }
-) {
-  const { data, error } = await supabase
-    .from('income')
-    .update(toIncomePayload({ ...payload, recordedBy: options?.currentUserId ?? undefined }))
-    .eq('id', id)
-    .select('*')
-    .single();
-
-  if (error) throw new Error(error.message);
-  return mapIncomeRow(data as IncomeRow);
-}
-
-export async function deleteIncome(id: string) {
-  const { error } = await supabase.from('income').delete().eq('id', id);
-  if (error) throw new Error(error.message);
-}
-
-export async function fetchExpenses(month?: number | 'all', year?: number | 'all') {
-  let query = supabase
-    .from('expenses')
-    .select('*')
-    .order('payment_date', { ascending: false });
-
-  if (month && year && month !== 'all' && year !== 'all') {
-    const start = new Date(Date.UTC(year, month - 1, 1)).toISOString().slice(0, 10);
-    const end = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
-    query = query.gte('payment_date', start).lte('payment_date', end);
-  }
-
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => mapExpenseRow(row as ExpenseRow));
-}
-
-export async function createExpense(
-  payload: Partial<ExpenseEntry>,
-  options?: { currentUserId?: string | null }
-) {
-  const transactionId = payload.transactionId || await generateTransactionId('EXP', ['expenses']);
-
-  const { data, error } = await supabase
-    .from('expenses')
-    .insert(toExpensePayload({ ...payload, transactionId, recordedBy: options?.currentUserId ?? undefined }))
-    .select('*')
-    .single();
-
-  if (error) throw new Error(error.message);
-  return mapExpenseRow(data as ExpenseRow);
-}
-
-export async function updateExpense(
-  id: string,
-  payload: Partial<ExpenseEntry>,
-  options?: { currentUserId?: string | null }
-) {
-  const { data, error } = await supabase
-    .from('expenses')
-    .update(toExpensePayload({ ...payload, recordedBy: options?.currentUserId ?? undefined }))
-    .eq('id', id)
-    .select('*')
-    .single();
-
-  if (error) throw new Error(error.message);
-  return mapExpenseRow(data as ExpenseRow);
-}
-
-export async function deleteExpense(id: string) {
-  const { error } = await supabase.from('expenses').delete().eq('id', id);
-  if (error) throw new Error(error.message);
-}
-
-const fetchSummaryForTable = async (table: 'contributions' | 'income' | 'expenses') => {
-  const { data, error, count } = await supabase
-    .from(table)
-    .select('amount', { count: 'exact' });
-
-  if (error) throw new Error(error.message);
-
-  const totalAmount = (data ?? []).reduce((sum, row) => sum + toNumber((row as { amount: number | string }).amount), 0);
-  return { totalAmount, count: count ?? data?.length ?? 0 };
-};
 
 export async function fetchFinanceSummary() {
-  const [contributions, income, expenses] = await Promise.all([
-    fetchSummaryForTable('contributions'),
-    fetchSummaryForTable('income'),
-    fetchSummaryForTable('expenses'),
+  const [contributions, ledgerIncome, expenses] = await Promise.all([
+    supabase.from('contributions').select('amount'),
+    supabase.from('income_combined').select('amount'),
+    supabase.from('expenses').select('amount'),
   ]);
 
-  // Ledger: unique income by transaction_id to avoid double-counting mirrored contributions
-  const { data: incomeRows, error: incomeLedgerError } = await supabase
-    .from('income')
-    .select('transaction_id, amount');
-  if (incomeLedgerError) throw new Error(incomeLedgerError.message);
-
-  const seen = new Set<string>();
-  let ledgerIncomeTotal = 0;
-  let ledgerIncomeCount = 0;
-  (incomeRows ?? []).forEach((row) => {
-    const txn = (row as { transaction_id?: string }).transaction_id;
-    const amt = toNumber((row as { amount: number | string }).amount);
-    if (txn && !seen.has(txn)) {
-      seen.add(txn);
-      ledgerIncomeTotal += amt;
-      ledgerIncomeCount += 1;
-    }
-  });
+  const totalContributions = (contributions.data || []).reduce((sum, item) => sum + (item.amount || 0), 0);
+  const totalLedgerIncome = (ledgerIncome.data || []).reduce((sum, item) => sum + (item.amount || 0), 0);
+  const totalExpenses = (expenses.data || []).reduce((sum, item) => sum + (item.amount || 0), 0);
 
   return {
-    contributions,
-    income,
-    expenses,
-    ledgerIncome: {
-      totalAmount: ledgerIncomeTotal,
-      count: ledgerIncomeCount,
+    contributions: {
+      totalAmount: totalContributions,
+      count: contributions.data?.length || 0,
     },
-    netIncome: ledgerIncomeTotal,
+    ledgerIncome: {
+      totalAmount: totalLedgerIncome,
+      count: ledgerIncome.data?.length || 0,
+    },
+    expenses: {
+      totalAmount: totalExpenses,
+      count: expenses.data?.length || 0,
+    },
   };
 }
 
-export type TransactionListItem = {
-  id: string;
-  transactionId: string;
-  amount: number;
-  date: string;
-  reason: string;
-  type: 'income' | 'expense';
-  source?: string | null;
-};
-
-export type LedgerItem = {
-  id: string;
-  transactionId: string;
-  amount: number;
-  date: string;
-  reason: string;
-  type: 'income' | 'expense' | 'contribution';
-  table: 'income' | 'expenses' | 'contributions';
-  source?: string | null;
-};
-
-export async function fetchRecentTransactions(limit = 10): Promise<TransactionListItem[]> {
-  const [incomeRes, expenseRes] = await Promise.all([
+export async function fetchRecentTransactions(limit: number = 10): Promise<TransactionListItem[]> {
+  const [incomeResult, expensesResult] = await Promise.all([
     supabase
-      .from('income')
-      .select('id, transaction_id, amount, payment_date, reason, source')
-      .order('payment_date', { ascending: false })
+      .from('income_combined')
+      .select('id, transaction_id, amount, reason, payment_at, source')
+      .order('payment_at', { ascending: false })
       .limit(limit),
     supabase
       .from('expenses')
-      .select('id, transaction_id, amount, payment_date, reason')
-      .order('payment_date', { ascending: false })
+      .select('id, transaction_id, amount, reason, payment_at')
+      .order('payment_at', { ascending: false })
       .limit(limit),
   ]);
 
-  if (incomeRes.error) throw new Error(incomeRes.error.message);
-  if (expenseRes.error) throw new Error(expenseRes.error.message);
-
-  const incomeItems: TransactionListItem[] = (incomeRes.data ?? []).map((row) => ({
-    id: (row as { id: string }).id,
-    transactionId: (row as { transaction_id: string }).transaction_id,
-    amount: toNumber((row as { amount: number | string }).amount),
-    date: (row as { payment_date: string }).payment_date,
-    reason: (row as { reason: string }).reason,
-    type: 'income',
-    source: (row as { source?: string | null }).source ?? null,
-  }));
-
-  const expenseItems: TransactionListItem[] = (expenseRes.data ?? []).map((row) => ({
-    id: (row as { id: string }).id,
-    transactionId: (row as { transaction_id: string }).transaction_id,
-    amount: toNumber((row as { amount: number | string }).amount),
-    date: (row as { payment_date: string }).payment_date,
-    reason: (row as { reason: string }).reason,
-    type: 'expense',
-    source: null,
-  }));
-
-  const combined = [...incomeItems, ...expenseItems].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-  );
-
-  return combined.slice(0, limit);
-}
-
-export async function searchTransactions(term: string, limit = 15): Promise<Array<TransactionListItem & { table: 'income' | 'expenses' | 'contributions' }>> {
-  const like = `%${term}%`;
-
-  const [incomeRes, expenseRes, contribRes] = await Promise.all([
-    supabase
-      .from('income')
-      .select('id, transaction_id, amount, payment_date, reason, source')
-      .or(`transaction_id.ilike.${like},reason.ilike.${like},source.ilike.${like}`)
-      .limit(limit),
-    supabase
-      .from('expenses')
-      .select('id, transaction_id, amount, payment_date, reason')
-      .or(`transaction_id.ilike.${like},reason.ilike.${like}`)
-      .limit(limit),
-    supabase
-      .from('contributions')
-      .select('id, transaction_id, amount, payment_date, reason')
-      .or(`transaction_id.ilike.${like},reason.ilike.${like}`)
-      .limit(limit),
-  ]);
-
-  if (incomeRes.error) throw new Error(incomeRes.error.message);
-  if (expenseRes.error) throw new Error(expenseRes.error.message);
-  if (contribRes.error) throw new Error(contribRes.error.message);
-
-  const incomeItems = (incomeRes.data ?? []).map((row) => ({
-    id: (row as { id: string }).id,
-    transactionId: (row as { transaction_id: string }).transaction_id,
-    amount: toNumber((row as { amount: number | string }).amount),
-    date: (row as { payment_date: string }).payment_date,
-    reason: (row as { reason: string }).reason,
+  const income: TransactionListItem[] = (incomeResult.data || []).map((item) => ({
+    id: item.id,
+    transactionId: item.transaction_id,
+    amount: item.amount,
+    reason: item.reason,
+    date: item.payment_at,
     type: 'income' as const,
-    source: (row as { source?: string | null }).source ?? null,
-    table: 'income' as const,
+    source: item.source,
   }));
 
-  const expenseItems = (expenseRes.data ?? []).map((row) => ({
-    id: (row as { id: string }).id,
-    transactionId: (row as { transaction_id: string }).transaction_id,
-    amount: toNumber((row as { amount: number | string }).amount),
-    date: (row as { payment_date: string }).payment_date,
-    reason: (row as { reason: string }).reason,
+  const expenses: TransactionListItem[] = (expensesResult.data || []).map((item) => ({
+    id: item.id,
+    transactionId: item.transaction_id,
+    amount: item.amount,
+    reason: item.reason,
+    date: item.payment_at,
     type: 'expense' as const,
-    source: null,
-    table: 'expenses' as const,
   }));
 
-  const contribItems = (contribRes.data ?? []).map((row) => ({
-    id: (row as { id: string }).id,
-    transactionId: (row as { transaction_id: string }).transaction_id,
-    amount: toNumber((row as { amount: number | string }).amount),
-    date: (row as { payment_date: string }).payment_date,
-    reason: (row as { reason: string }).reason,
-    type: 'income' as const,
-    source: 'contribution' as const,
-    table: 'contributions' as const,
-  }));
-
-  const combined = [...incomeItems, ...expenseItems, ...contribItems].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-  );
-
-  return combined.slice(0, limit);
+  return [...income, ...expenses]
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, limit);
 }
 
-export async function fetchLedgerTransactions(limit = 200): Promise<LedgerItem[]> {
-  const [incomeRes, expenseRes, contribRes] = await Promise.all([
+export async function searchTransactions(term: string, limit: number = 15) {
+  const searchPattern = `%${term}%`;
+
+  const [contributions, income, expenses] = await Promise.all([
     supabase
-      .from('income')
-      .select('id, transaction_id, amount, payment_date, reason, source')
-      .order('payment_date', { ascending: false })
+      .from('contributions')
+      .select('id, transaction_id, amount, reason, payment_at')
+      .or(`transaction_id.ilike.${searchPattern},reason.ilike.${searchPattern}`)
+      .limit(limit),
+    supabase
+      .from('income_combined')
+      .select('id, transaction_id, amount, reason, payment_at')
+      .or(`transaction_id.ilike.${searchPattern},reason.ilike.${searchPattern}`)
       .limit(limit),
     supabase
       .from('expenses')
-      .select('id, transaction_id, amount, payment_date, reason')
-      .order('payment_date', { ascending: false })
-      .limit(limit),
-    supabase
-      .from('contributions')
-      .select('id, transaction_id, amount, payment_date, reason')
-      .order('payment_date', { ascending: false })
+      .select('id, transaction_id, amount, reason, payment_at')
+      .or(`transaction_id.ilike.${searchPattern},reason.ilike.${searchPattern}`)
       .limit(limit),
   ]);
 
-  if (incomeRes.error) throw new Error(incomeRes.error.message);
-  if (expenseRes.error) throw new Error(expenseRes.error.message);
-  if (contribRes.error) throw new Error(contribRes.error.message);
+  const results: Array<TransactionListItem & { table: 'income' | 'expenses' | 'contributions' }> = [
+    ...(contributions.data || []).map((item) => ({
+      id: item.id,
+      transactionId: item.transaction_id,
+      amount: item.amount,
+      reason: item.reason,
+      date: item.payment_at,
+      type: 'contribution' as const,
+      table: 'contributions' as const,
+    })),
+    ...(income.data || []).map((item) => ({
+      id: item.id,
+      transactionId: item.transaction_id,
+      amount: item.amount,
+      reason: item.reason,
+      date: item.payment_at,
+      type: 'income' as const,
+      table: 'income' as const,
+    })),
+    ...(expenses.data || []).map((item) => ({
+      id: item.id,
+      transactionId: item.transaction_id,
+      amount: item.amount,
+      reason: item.reason,
+      date: item.payment_at,
+      type: 'expense' as const,
+      table: 'expenses' as const,
+    })),
+  ];
 
-  const incomeItems: LedgerItem[] = (incomeRes.data ?? []).map((row) => ({
-    id: (row as { id: string }).id,
-    transactionId: (row as { transaction_id: string }).transaction_id,
-    amount: toNumber((row as { amount: number | string }).amount),
-    date: (row as { payment_date: string }).payment_date,
-    reason: (row as { reason: string }).reason,
-    type: 'income',
-    table: 'income',
-    source: (row as { source?: string | null }).source ?? null,
-  }));
-
-  const expenseItems: LedgerItem[] = (expenseRes.data ?? []).map((row) => ({
-    id: (row as { id: string }).id,
-    transactionId: (row as { transaction_id: string }).transaction_id,
-    amount: toNumber((row as { amount: number | string }).amount),
-    date: (row as { payment_date: string }).payment_date,
-    reason: (row as { reason: string }).reason,
-    type: 'expense',
-    table: 'expenses',
-    source: null,
-  }));
-
-  const contribItems: LedgerItem[] = (contribRes.data ?? []).map((row) => ({
-    id: (row as { id: string }).id,
-    transactionId: (row as { transaction_id: string }).transaction_id,
-    amount: toNumber((row as { amount: number | string }).amount),
-    date: (row as { payment_date: string }).payment_date,
-    reason: (row as { reason: string }).reason,
-    type: 'contribution',
-    table: 'contributions',
-    source: 'contribution',
-  }));
-
-  const combined = [...incomeItems, ...expenseItems, ...contribItems].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-  );
-
-  return combined.slice(0, limit);
+  return results.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
 
+export async function fetchLedgerTransactions(limit: number = 300): Promise<LedgerItem[]> {
+  const [contributions, income, expenses] = await Promise.all([
+    supabase
+      .from('contributions')
+      .select('id, transaction_id, amount, reason, payment_at')
+      .order('payment_at', { ascending: false })
+      .limit(limit),
+    supabase
+      .from('income_combined')
+      .select('id, transaction_id, amount, reason, payment_at')
+      .order('payment_at', { ascending: false })
+      .limit(limit),
+    supabase
+      .from('expenses')
+      .select('id, transaction_id, amount, reason, payment_at')
+      .order('payment_at', { ascending: false })
+      .limit(limit),
+  ]);
+
+  const ledger: LedgerItem[] = [
+    ...(contributions.data || []).map((item) => ({
+      id: item.id,
+      transactionId: item.transaction_id,
+      amount: item.amount,
+      reason: item.reason,
+      date: item.payment_at,
+      type: 'contribution' as const,
+      table: 'contributions',
+    })),
+    ...(income.data || []).map((item) => ({
+      id: item.id,
+      transactionId: item.transaction_id,
+      amount: item.amount,
+      reason: item.reason,
+      date: item.payment_at,
+      type: 'income' as const,
+      table: 'income',
+    })),
+    ...(expenses.data || []).map((item) => ({
+      id: item.id,
+      transactionId: item.transaction_id,
+      amount: item.amount,
+      reason: item.reason,
+      date: item.payment_at,
+      type: 'expense' as const,
+      table: 'expenses',
+    })),
+  ];
+
+  return ledger.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
+export async function fetchContributions(sort: string = 'all', paymentMethod: string = 'all') {
+  let query = supabase.from('contributions').select('*');
+
+  if (paymentMethod !== 'all') {
+    query = query.eq('payment_method', paymentMethod);
+  }
+
+  const result = await query;
+  return result.data || [];
+}
+
+export async function fetchIncome(sort: string = 'all', paymentMethod: string = 'all') {
+  let query = supabase.from('income_combined').select('*');
+
+  if (paymentMethod !== 'all') {
+    query = query.eq('payment_method', paymentMethod);
+  }
+
+  const result = await query;
+  return result.data || [];
+}
+
+export async function fetchExpenses(sort: string = 'all', paymentMethod: string = 'all') {
+  let query = supabase.from('expenses').select('*');
+
+  if (paymentMethod !== 'all') {
+    query = query.eq('payment_method', paymentMethod);
+  }
+
+  const result = await query;
+  return result.data || [];
+}
+
+export async function createContribution(contribution: Partial<ContributionEntry>): Promise<ContributionEntry> {
+  const { data, error } = await supabase
+    .from('contributions')
+    .insert([contribution])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateContribution(id: string, updates: Partial<ContributionEntry>): Promise<ContributionEntry> {
+  const { data, error } = await supabase
+    .from('contributions')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteContribution(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('contributions')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+export async function createIncome(income: Partial<IncomeEntry>): Promise<IncomeEntry> {
+  const { data, error } = await supabase
+    .from('income')
+    .insert([income])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateIncome(id: string, updates: Partial<IncomeEntry>): Promise<IncomeEntry> {
+  const { data, error } = await supabase
+    .from('income')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteIncome(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('income')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+export async function createExpense(expense: Partial<ExpenseEntry>): Promise<ExpenseEntry> {
+  const { data, error } = await supabase
+    .from('expenses')
+    .insert([expense])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateExpense(id: string, updates: Partial<ExpenseEntry>): Promise<ExpenseEntry> {
+  const { data, error} = await supabase
+    .from('expenses')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteExpense(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('expenses')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+export async function uploadEvidence(file: File): Promise<string> {
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+  const filePath = `evidence/${fileName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('finance-evidence')
+    .upload(filePath, file);
+
+  if (uploadError) throw uploadError;
+
+  const { data } = supabase.storage
+    .from('finance-evidence')
+    .getPublicUrl(filePath);
+
+  return data.publicUrl;
+}
