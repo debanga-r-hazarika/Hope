@@ -33,7 +33,7 @@ export function Agile({ accessLevel }: AgileProps) {
   const [saving, setSaving] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<{ statusIds: string[]; ownerId: string; tag: string; dueRange: '' | 'overdue' | 'week' | 'today'; sort: '' | 'deadline-asc'; readyOnly: boolean; assignedOnly: boolean }>({
+  const [filters, setFilters] = useState<{ statusIds: string[]; ownerId: string; tag: string; dueRange: '' | 'overdue' | 'week' | 'today'; sort: '' | 'deadline-asc' | 'status-asc'; readyOnly: boolean; assignedOnly: boolean }>({
     statusIds: [],
     ownerId: '',
     tag: '',
@@ -141,6 +141,22 @@ export function Agile({ accessLevel }: AgileProps) {
         const db = b.deadlineDate ? new Date(b.deadlineDate).getTime() : Number.MAX_SAFE_INTEGER;
         if (da === db) return 0;
         return da < db ? -1 : 1;
+      });
+    } else if (filters.sort === 'status-asc') {
+      list = [...list].sort((a, b) => {
+        const getStatusOrder = (statusId: string | null) => {
+          if (!statusId) return 999;
+          const status = statuses.find((s) => s.id === statusId);
+          if (!status) return 999;
+          const name = status.name.toLowerCase();
+          if (name.includes('to do') || name.includes('todo')) return 0;
+          if (name.includes('progress')) return 1;
+          if (name.includes('done')) return 2;
+          return 999;
+        };
+        const orderA = getStatusOrder(a.statusId);
+        const orderB = getStatusOrder(b.statusId);
+        return orderA - orderB;
       });
     }
 
@@ -453,7 +469,7 @@ export function Agile({ accessLevel }: AgileProps) {
         </div>
       </div>
 
-      <div className="hidden md:block">
+      <div>
         <div className="grid grid-cols-3 rounded-lg border border-gray-200 overflow-hidden">
           {(['board', 'backlog', 'roadmap'] as ViewMode[]).map((mode) => (
             <button
@@ -592,6 +608,7 @@ export function Agile({ accessLevel }: AgileProps) {
           >
             <option value="">Default</option>
             <option value="deadline-asc">Soonest deadline first</option>
+            <option value="status-asc">By status (To-Do → In Progress → Done)</option>
           </select>
         </div>
 
