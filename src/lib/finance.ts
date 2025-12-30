@@ -24,7 +24,7 @@ export interface LedgerItem {
 export async function fetchFinanceSummary() {
   const [contributions, ledgerIncome, expenses] = await Promise.all([
     supabase.from('contributions').select('amount'),
-    supabase.from('income_combined').select('amount'),
+    supabase.from('income').select('amount'),
     supabase.from('expenses').select('amount'),
   ]);
 
@@ -51,7 +51,7 @@ export async function fetchFinanceSummary() {
 export async function fetchRecentTransactions(limit: number = 10): Promise<TransactionListItem[]> {
   const [incomeResult, expensesResult] = await Promise.all([
     supabase
-      .from('income_combined')
+      .from('income')
       .select('id, transaction_id, amount, reason, payment_at, source')
       .order('payment_at', { ascending: false })
       .limit(limit),
@@ -96,7 +96,7 @@ export async function searchTransactions(term: string, limit: number = 15) {
       .or(`transaction_id.ilike.${searchPattern},reason.ilike.${searchPattern}`)
       .limit(limit),
     supabase
-      .from('income_combined')
+      .from('income')
       .select('id, transaction_id, amount, reason, payment_at')
       .or(`transaction_id.ilike.${searchPattern},reason.ilike.${searchPattern}`)
       .limit(limit),
@@ -148,7 +148,7 @@ export async function fetchLedgerTransactions(limit: number = 300): Promise<Ledg
       .order('payment_at', { ascending: false })
       .limit(limit),
     supabase
-      .from('income_combined')
+      .from('income')
       .select('id, transaction_id, amount, reason, payment_at')
       .order('payment_at', { ascending: false })
       .limit(limit),
@@ -204,7 +204,7 @@ export async function fetchContributions(sort: string = 'all', paymentMethod: st
 }
 
 export async function fetchIncome(sort: string = 'all', paymentMethod: string = 'all') {
-  let query = supabase.from('income_combined').select('*');
+  let query = supabase.from('income').select('*');
 
   if (paymentMethod !== 'all') {
     query = query.eq('payment_method', paymentMethod);

@@ -4,11 +4,32 @@ import type { DocumentRecord } from '../types/documents';
 export async function fetchDocuments(): Promise<DocumentRecord[]> {
   const { data, error } = await supabase
     .from('documents')
-    .select('*')
+    .select(`
+      id,
+      name,
+      file_name,
+      file_type,
+      file_size,
+      file_url,
+      file_path,
+      uploaded_by,
+      uploaded_at
+    `)
     .order('uploaded_at', { ascending: false });
 
   if (error) throw error;
-  return data || [];
+
+  return (data || []).map((doc: any) => ({
+    id: doc.id,
+    name: doc.name,
+    fileName: doc.file_name,
+    fileType: doc.file_type,
+    fileSize: doc.file_size,
+    fileUrl: doc.file_url,
+    filePath: doc.file_path,
+    uploadedBy: doc.uploaded_by,
+    uploadedAt: doc.uploaded_at,
+  }));
 }
 
 export async function uploadDocument(
@@ -47,7 +68,18 @@ export async function uploadDocument(
     .single();
 
   if (error) throw error;
-  return data;
+
+  return {
+    id: data.id,
+    name: data.name,
+    fileName: data.file_name,
+    fileType: data.file_type,
+    fileSize: data.file_size,
+    fileUrl: data.file_url,
+    filePath: data.file_path,
+    uploadedBy: data.uploaded_by,
+    uploadedAt: data.uploaded_at,
+  };
 }
 
 export async function deleteDocument(id: string, filePath: string): Promise<void> {
