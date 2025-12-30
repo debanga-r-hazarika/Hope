@@ -177,7 +177,7 @@ export function Agile({ accessLevel }: AgileProps) {
     return map;
   }, [filteredIssues, statuses]);
 
-  const pointsByStatus = useMemo(() => summarizePointsByStatus(filteredIssues), [filteredIssues]);
+  const pointsByStatus = useMemo(() => summarizePointsByStatus(filteredIssues, statuses), [filteredIssues, statuses]);
   const totalPoints = useMemo(
     () => filteredIssues.reduce((sum, issue) => sum + (issue.estimate ?? 0), 0),
     [filteredIssues]
