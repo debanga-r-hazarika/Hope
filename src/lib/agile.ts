@@ -60,7 +60,7 @@ export async function fetchAgileOwners() {
     .order('full_name');
 
   if (error) throw error;
-  return data || [];
+  return (data || []).map(user => ({ id: user.id, name: user.full_name }));
 }
 
 export function summarizePointsByStatus(issues: AgileIssue[], statuses: AgileStatus[]) {
@@ -83,13 +83,20 @@ export async function fetchAgileBuckets(): Promise<AgileRoadmapBucket[]> {
   return fetchRoadmapBuckets();
 }
 
-export async function updateIssueOrdering(id: string, ordering: number): Promise<void> {
-  const { error } = await supabase
-    .from('agile_issues')
-    .update({ ordering })
-    .eq('id', id);
+export async function updateIssueOrdering(updates: Array<{ id: string; statusId: string | null; ordering: number }>): Promise<void> {
+  for (const update of updates) {
+    const payload: any = { ordering: update.ordering };
+    if (update.statusId !== undefined) {
+      payload.status_id = update.statusId;
+    }
 
-  if (error) throw error;
+    const { error } = await supabase
+      .from('agile_issues')
+      .update(payload)
+      .eq('id', update.id);
+
+    if (error) throw error;
+  }
 }
 
 export async function createStatus(status: Partial<AgileStatus>): Promise<AgileStatus> {
@@ -150,7 +157,7 @@ export async function fetchIssues(filters?: AgileFilters): Promise<AgileIssue[]>
 }
 
 export async function createIssue(issue: AgileIssueInput): Promise<AgileIssue> {
-  const payload = {
+  const payload: any = {
     title: issue.title,
     description: issue.description,
     status_id: issue.statusId,
@@ -159,13 +166,16 @@ export async function createIssue(issue: AgileIssueInput): Promise<AgileIssue> {
     owner_name: issue.ownerName,
     tags: issue.tags,
     roadmap_bucket: issue.roadmapBucket,
-    ordering: issue.ordering,
     created_by: issue.createdBy,
     priority: issue.priority,
     deadline_date: issue.deadlineDate,
     ready_for_review: issue.readyForReview || false,
     review_rejected: issue.reviewRejected || false,
   };
+
+  if (issue.ordering !== undefined && issue.ordering !== null) {
+    payload.ordering = issue.ordering;
+  }
 
   const { data, error } = await supabase
     .from('agile_issues')
