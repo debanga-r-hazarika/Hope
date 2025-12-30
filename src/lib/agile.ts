@@ -49,8 +49,8 @@ export async function deleteAgileIssue(id: string): Promise<void> {
   return deleteIssue(id);
 }
 
-export async function createAgileIssue(issue: AgileIssueInput): Promise<AgileIssue> {
-  return createIssue(issue);
+export async function createAgileIssue(issue: AgileIssueInput, options?: { createdBy?: string }): Promise<AgileIssue> {
+  return createIssue({ ...issue, createdBy: options?.createdBy });
 }
 
 export async function fetchAgileOwners() {
@@ -163,8 +163,8 @@ export async function createIssue(issue: AgileIssueInput): Promise<AgileIssue> {
     created_by: issue.createdBy,
     priority: issue.priority,
     deadline_date: issue.deadlineDate,
-    ready_for_review: issue.readyForReview,
-    review_rejected: issue.reviewRejected,
+    ready_for_review: issue.readyForReview || false,
+    review_rejected: issue.reviewRejected || false,
   };
 
   const { data, error } = await supabase

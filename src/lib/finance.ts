@@ -86,6 +86,25 @@ function mapDbToContribution(row: any): ContributionEntry {
   };
 }
 
+async function generateTransactionId(table: 'income' | 'expenses' | 'contributions'): Promise<string> {
+  const prefix = table === 'income' ? 'TXN-INC-' : table === 'expenses' ? 'TXN-EXP-' : 'TXN-CNT-';
+
+  const { data } = await supabase
+    .from(table)
+    .select('transaction_id')
+    .like('transaction_id', `${prefix}%`)
+    .order('transaction_id', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (data?.transaction_id) {
+    const lastNum = parseInt(data.transaction_id.replace(prefix, ''));
+    return `${prefix}${String(lastNum + 1).padStart(3, '0')}`;
+  }
+
+  return `${prefix}001`;
+}
+
 export async function fetchFinanceSummary() {
   const [contributions, ledgerIncome, expenses] = await Promise.all([
     supabase.from('contributions').select('amount'),
@@ -318,11 +337,13 @@ export async function fetchExpenses(month: number | 'all' = 'all', year: number 
 }
 
 export async function createContribution(contribution: Partial<ContributionEntry>, options?: { currentUserId?: string }): Promise<ContributionEntry> {
+  const transactionId = contribution.transactionId || await generateTransactionId('contributions');
+
   const payload: any = {
     amount: contribution.amount,
     contribution_type: contribution.contributionType,
     reason: contribution.reason,
-    transaction_id: contribution.transactionId,
+    transaction_id: transactionId,
     payment_to: contribution.paymentTo,
     paid_to_user: contribution.paidToUser,
     payment_date: contribution.paymentDate,
@@ -385,12 +406,14 @@ export async function deleteContribution(id: string): Promise<void> {
 }
 
 export async function createIncome(income: Partial<IncomeEntry>, options?: { currentUserId?: string }): Promise<IncomeEntry> {
+  const transactionId = income.transactionId || await generateTransactionId('income');
+
   const payload: any = {
     amount: income.amount,
     source: income.source,
     income_type: income.incomeType,
     reason: income.reason,
-    transaction_id: income.transactionId,
+    transaction_id: transactionId,
     payment_to: income.paymentTo,
     paid_to_user: income.paidToUser,
     payment_date: income.paymentDate,
@@ -454,12 +477,14 @@ export async function deleteIncome(id: string): Promise<void> {
 }
 
 export async function createExpense(expense: Partial<ExpenseEntry>, options?: { currentUserId?: string }): Promise<ExpenseEntry> {
+  const transactionId = expense.transactionId || await generateTransactionId('expenses');
+
   const payload: any = {
     amount: expense.amount,
     vendor: expense.vendor,
     expense_type: expense.expenseType,
     reason: expense.reason,
-    transaction_id: expense.transactionId,
+    transaction_id: transactionId,
     payment_to: expense.paymentTo,
     paid_to_user: expense.paidToUser,
     payment_date: expense.paymentDate,
@@ -525,7 +550,7 @@ export async function deleteExpense(id: string): Promise<void> {
 export async function uploadEvidence(file: File, module: 'income' | 'expenses' | 'contributions'): Promise<string> {
   const fileExt = file.name.split('.').pop();
   const fileName = `${Date.now()}-${crypto.randomUUID()}.${fileExt}`;
-  const filePath = `evidence/${module}/${fileName}`;
+  const filePath = `${module}/${fileName}`;
 
   const { error: uploadError } = await supabase.storage
     .from('evidence')

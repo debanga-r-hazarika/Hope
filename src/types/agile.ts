@@ -42,6 +42,8 @@ export interface AgileIssueInput {
   ownerName?: string | null;
   tags?: string[];
   roadmapBucket?: string | null;
+  ordering?: number;
+  createdBy?: string;
   readyForReview?: boolean;
   reviewRejected?: boolean;
 }
