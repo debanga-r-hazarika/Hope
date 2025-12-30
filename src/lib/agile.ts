@@ -257,7 +257,7 @@ export async function updateRoadmapBucket(id: string, updates: Partial<AgileRoad
 }
 
 export async function deleteRoadmapBucket(id: string): Promise<void> {
-  const { error } = await supabase
+  const { error} = await supabase
     .from('agile_roadmap_buckets')
     .delete()
     .eq('id', id);
