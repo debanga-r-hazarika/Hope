@@ -5,7 +5,8 @@ import {
   ShoppingCart,
   TrendingUp,
   FileText,
-  KanbanSquare
+  KanbanSquare,
+  Factory
 } from 'lucide-react';
 import type { ModuleAccessMap } from '../types/access';
 import { MODULE_DEFINITIONS, type ModuleId } from '../types/modules';
@@ -33,6 +34,7 @@ const MODULE_ICON_MAP: Record<
   analytics: { icon: TrendingUp, color: 'bg-pink-50 text-pink-600' },
   documents: { icon: FileText, color: 'bg-indigo-50 text-indigo-600' },
   agile: { icon: KanbanSquare, color: 'bg-sky-50 text-sky-600' },
+  operations: { icon: Factory, color: 'bg-orange-50 text-orange-600' },
 };
 
 export function Dashboard({ onNavigateToModule, moduleAccess }: DashboardProps) {
@@ -56,7 +58,7 @@ export function Dashboard({ onNavigateToModule, moduleAccess }: DashboardProps) 
   const handleModuleClick = (moduleId: ModuleId) => {
     if (
       onNavigateToModule &&
-      (moduleId === 'finance' || moduleId === 'documents' || moduleId === 'agile')
+      (moduleId === 'finance' || moduleId === 'documents' || moduleId === 'agile' || moduleId === 'operations')
     ) {
       onNavigateToModule(moduleId);
       return;

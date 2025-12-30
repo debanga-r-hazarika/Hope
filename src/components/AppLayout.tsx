@@ -13,11 +13,18 @@ import { Contributions } from '../pages/Contributions';
 import { Income } from '../pages/Income';
 import { Expenses } from '../pages/Expenses';
 import { Agile } from '../pages/Agile';
+import { Suppliers } from '../pages/Suppliers';
+import { RawMaterials } from '../pages/RawMaterials';
+import { RecurringProducts } from '../pages/RecurringProducts';
+import { Production } from '../pages/Production';
+import { ProcessedGoods } from '../pages/ProcessedGoods';
+import { Machines } from '../pages/Machines';
 import { NAVIGATION_ITEMS, type NavigationItem, type PageType } from '../types/navigation';
 import { useModuleAccess } from '../contexts/ModuleAccessContext';
 import type { ModuleId } from '../types/modules';
 
 type FinanceSection = 'dashboard' | 'contributions' | 'income' | 'expenses';
+type OperationsSection = 'suppliers' | 'raw-materials' | 'recurring-products' | 'production' | 'processed-goods' | 'machines';
 
 export function AppLayout() {
   const { signOut } = useAuth();
@@ -26,6 +33,7 @@ export function AppLayout() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [financeSection, setFinanceSection] = useState<FinanceSection>('dashboard');
+  const [operationsSection, setOperationsSection] = useState<OperationsSection>('suppliers');
   const [focusContributionTxnId, setFocusContributionTxnId] = useState<string | null>(null);
   const [focusIncomeTxnId, setFocusIncomeTxnId] = useState<string | null>(null);
   const [focusExpenseTxnId, setFocusExpenseTxnId] = useState<string | null>(null);
@@ -47,12 +55,14 @@ export function AppLayout() {
     const isBlockedModule =
       (page === 'finance' && getAccessLevel('finance') === 'no-access') ||
       (page === 'documents' && getAccessLevel('documents') === 'no-access') ||
-      (page === 'agile' && getAccessLevel('agile') === 'no-access');
+      (page === 'agile' && getAccessLevel('agile') === 'no-access') ||
+      (page === 'operations' && getAccessLevel('operations') === 'no-access');
 
     if (isBlockedModule) {
       setActivePage('dashboard');
       setSelectedUserId(null);
       setFinanceSection('dashboard');
+      setOperationsSection('suppliers');
       setFocusContributionTxnId(null);
       setFocusIncomeTxnId(null);
       setFocusExpenseTxnId(null);
@@ -63,6 +73,7 @@ export function AppLayout() {
     setActivePage(page);
     setSelectedUserId(null);
     setFinanceSection('dashboard');
+    setOperationsSection('suppliers');
     setFocusContributionTxnId(null);
     setFocusIncomeTxnId(null);
     setFocusExpenseTxnId(null);
@@ -85,7 +96,7 @@ export function AppLayout() {
   const availableNavItems: NavigationItem[] = useMemo(
     () =>
       NAVIGATION_ITEMS.filter((item) => {
-        if (item.id === 'finance' || item.id === 'documents' || item.id === 'agile') {
+        if (item.id === 'finance' || item.id === 'documents' || item.id === 'agile' || item.id === 'operations') {
           return getAccessLevel(item.id as ModuleId) !== 'no-access';
         }
         return true;
@@ -102,6 +113,9 @@ export function AppLayout() {
         setActivePage('dashboard');
       }
       if (activePage === 'agile' && getAccessLevel('agile') === 'no-access') {
+        setActivePage('dashboard');
+      }
+      if (activePage === 'operations' && getAccessLevel('operations') === 'no-access') {
         setActivePage('dashboard');
       }
     }
@@ -221,6 +235,24 @@ export function AppLayout() {
         return <Documents accessLevel={getAccessLevel('documents')} />;
       case 'agile':
         return <Agile accessLevel={getAccessLevel('agile')} />;
+      case 'operations':
+        const operationsAccessLevel = getAccessLevel('operations');
+        switch (operationsSection) {
+          case 'suppliers':
+            return <Suppliers accessLevel={operationsAccessLevel} />;
+          case 'raw-materials':
+            return <RawMaterials accessLevel={operationsAccessLevel} />;
+          case 'recurring-products':
+            return <RecurringProducts accessLevel={operationsAccessLevel} />;
+          case 'production':
+            return <Production accessLevel={operationsAccessLevel} />;
+          case 'processed-goods':
+            return <ProcessedGoods accessLevel={operationsAccessLevel} />;
+          case 'machines':
+            return <Machines accessLevel={operationsAccessLevel} />;
+          default:
+            return <Suppliers accessLevel={operationsAccessLevel} />;
+        }
       default:
         return (
           <Dashboard
